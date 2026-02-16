@@ -1,0 +1,1407 @@
+"""
+Data Dictionary Web UI - Flask Backend with RBAC
+ENHANCED VERSION with User Groups, PDF Export, and Complete Features
+"""
+
+from flask import Flask, request, jsonify, session, render_template, send_file
+from flask_cors import CORS
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
+from functools import wraps
+import yaml
+import os
+import sqlite3
+from datetime import datetime, timedelta
+import jwt
+from typing import List, Dict, Any, Optional
+import secrets
+from dotenv import load_dotenv
+import io
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib import colors
+
+# Load environment variables from .env file
+load_dotenv()
+
+app = Flask(__name__)
+
+# ============================================================================
+# CRITICAL: Secure Configuration (Fixed)
+# ============================================================================
+
+def load_or_generate_keys():
+    """Load keys from environment or generate and save them."""
+    secret_key = os.getenv('SECRET_KEY')
+    jwt_secret = os.getenv('JWT_SECRET_KEY')
+    
+    if not secret_key or not jwt_secret:
+        print("=" * 70)
+        print("⚠️  SECRET KEYS NOT FOUND!")
+        print("=" * 70)
+        print("Generating new keys and saving to .env file...")
+        print()
+        
+        secret_key = secrets.token_hex(32)
+        jwt_secret = secrets.token_hex(32)
+        
+        # Create or append to .env
+        env_path = '.env'
+        mode = 'a' if os.path.exists(env_path) else 'w'
+        
+        with open(env_path, mode) as f:
+            if mode == 'a':
+                f.write('\n')
+            f.write('# Auto-generated secret keys\n')
+            f.write(f'SECRET_KEY={secret_key}\n')
+            f.write(f'JWT_SECRET_KEY={jwt_secret}\n')
+            f.write('\n# Configuration\n')
+            f.write('YAML_DIRECTORY=./dbt_models\n')
+            f.write('DATABASE=./data_dictionary.db\n')
+        
+        print(f"✓ Keys saved to {env_path}")
+        print("⚠️  IMPORTANT: Keep .env file secure!")
+        print("⚠️  Add .env to .gitignore")
+        print("=" * 70)
+        print()
+    
+    return secret_key, jwt_secret
+
+SECRET_KEY, JWT_SECRET_KEY = load_or_generate_keys()
+
+app.config['SECRET_KEY'] = SECRET_KEY
+app.config['JWT_SECRET_KEY'] = JWT_SECRET_KEY
+app.config['YAML_DIRECTORY'] = os.getenv('YAML_DIRECTORY', './dbt_models')
+app.config['DATABASE'] = os.getenv('DATABASE', './data_dictionary.db')
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+
+CORS(app)
+login_manager = LoginManager()
+login_manager.init_app(app)
+
+
+# ============================================================================
+# Database Models & Setup (Enhanced with User Groups & Export Permissions)
+# ============================================================================
+
+def init_db():
+    """Initialize the SQLite database with all tables."""
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    
+    # Users table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_login TIMESTAMP,
+            is_active BOOLEAN DEFAULT 1,
+            can_export BOOLEAN DEFAULT 0
+        )
+    ''')
+    
+    # User Groups table (NEW)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_groups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            description TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            created_by INTEGER,
+            FOREIGN KEY (created_by) REFERENCES users (id)
+        )
+    ''')
+    
+    # User Group Membership table (NEW)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_group_members (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            group_id INTEGER NOT NULL,
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            added_by INTEGER,
+            UNIQUE(user_id, group_id),
+            FOREIGN KEY (user_id) REFERENCES users (id),
+            FOREIGN KEY (group_id) REFERENCES user_groups (id),
+            FOREIGN KEY (added_by) REFERENCES users (id)
+        )
+    ''')
+    
+    # Group Permissions table (NEW)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS group_permissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_id INTEGER NOT NULL,
+            resource_type TEXT NOT NULL,
+            resource_name TEXT NOT NULL,
+            permission_level TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (group_id) REFERENCES user_groups (id)
+        )
+    ''')
+    
+    # Permissions table (existing - for individual user permissions)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS permissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            resource_type TEXT NOT NULL,
+            resource_name TEXT NOT NULL,
+            permission_level TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
+    
+    # Activity log
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS activity_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            action TEXT NOT NULL,
+            resource_type TEXT,
+            resource_name TEXT,
+            ip_address TEXT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
+    
+    # Export log (NEW)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS export_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            export_type TEXT NOT NULL,
+            resources_exported TEXT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            file_size INTEGER,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
+    
+    # Create default admin user if not exists
+    cursor.execute("SELECT * FROM users WHERE username = 'admin'")
+    if not cursor.fetchone():
+        admin_password = generate_password_hash('admin123')
+        cursor.execute('''
+            INSERT INTO users (username, email, password_hash, role, can_export)
+            VALUES (?, ?, ?, ?, ?)
+        ''', ('admin', 'admin@example.com', admin_password, 'admin', 1))
+    
+    conn.commit()
+    conn.close()
+
+
+class User(UserMixin):
+    """User model for Flask-Login."""
+    
+    def __init__(self, id, username, email, role, can_export=False):
+        self.id = id
+        self.username = username
+        self.email = email
+        self.role = role
+        self.can_export = can_export
+    
+    @staticmethod
+    def get(user_id):
+        """Get user by ID."""
+        conn = sqlite3.connect(app.config['DATABASE'])
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, username, email, role, can_export FROM users WHERE id = ?', (user_id,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            return User(row[0], row[1], row[2], row[3], bool(row[4]))
+        return None
+    
+    @staticmethod
+    def get_by_username(username):
+        """Get user by username."""
+        conn = sqlite3.connect(app.config['DATABASE'])
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, username, email, role, password_hash, can_export FROM users WHERE username = ?', (username,))
+        row = cursor.fetchone()
+        conn.close()
+        return row
+    
+    @staticmethod
+    def get_by_email(email):
+        """Get user by email."""
+        conn = sqlite3.connect(app.config['DATABASE'])
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, username, email, role, can_export FROM users WHERE email = ?', (email,))
+        row = cursor.fetchone()
+        conn.close()
+        return row
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    """Load user for Flask-Login."""
+    return User.get(user_id)
+
+
+# ============================================================================
+# RBAC Decorators & Helper Functions
+# ============================================================================
+
+def role_required(*roles):
+    """Decorator to require specific roles."""
+    def decorator(f):
+        @wraps(f)
+        @login_required
+        def decorated_function(*args, **kwargs):
+            if current_user.role not in roles:
+                return jsonify({'error': 'Insufficient permissions'}), 403
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+
+def export_permission_required(f):
+    """Decorator to require export permission."""
+    @wraps(f)
+    @login_required
+    def decorated_function(*args, **kwargs):
+        if not current_user.can_export and current_user.role != 'admin':
+            return jsonify({'error': 'Export permission required'}), 403
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def check_resource_access(user_id: int, resource_type: str, resource_name: str) -> bool:
+    """
+    Check if user has access to a specific resource.
+    Checks both individual permissions and group permissions.
+    """
+    # Admin has access to everything
+    user = User.get(user_id)
+    if user and user.role == 'admin':
+        return True
+    
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    
+    # Check individual permissions
+    cursor.execute('''
+        SELECT * FROM permissions 
+        WHERE user_id = ? AND resource_type = ? AND resource_name = ?
+    ''', (user_id, resource_type, resource_name))
+    
+    if cursor.fetchone():
+        conn.close()
+        return True
+    
+    # Check group permissions
+    cursor.execute('''
+        SELECT gp.* FROM group_permissions gp
+        JOIN user_group_members ugm ON gp.group_id = ugm.group_id
+        WHERE ugm.user_id = ? AND gp.resource_type = ? AND gp.resource_name = ?
+    ''', (user_id, resource_type, resource_name))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    return result is not None
+
+
+def get_user_accessible_resources(user_id: int) -> Dict[str, List[str]]:
+    """Get all resources accessible to user (from both individual and group permissions)."""
+    user = User.get(user_id)
+    if user and user.role == 'admin':
+        # Admin has access to everything - return all from YAML
+        yaml_data = load_yaml_files()
+        databases = list(yaml_data.keys())
+        return {'databases': [db.replace('schema_', '').replace('.yml', '') for db in databases]}
+    
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    
+    # Get individual permissions
+    cursor.execute('''
+        SELECT DISTINCT resource_type, resource_name 
+        FROM permissions 
+        WHERE user_id = ?
+    ''', (user_id,))
+    
+    individual_perms = cursor.fetchall()
+    
+    # Get group permissions
+    cursor.execute('''
+        SELECT DISTINCT gp.resource_type, gp.resource_name
+        FROM group_permissions gp
+        JOIN user_group_members ugm ON gp.group_id = ugm.group_id
+        WHERE ugm.user_id = ?
+    ''', (user_id,))
+    
+    group_perms = cursor.fetchall()
+    conn.close()
+    
+    # Combine permissions
+    all_perms = individual_perms + group_perms
+    
+    resources = {'databases': [], 'tables': []}
+    for perm_type, perm_name in all_perms:
+        if perm_type == 'database':
+            resources['databases'].append(perm_name)
+        elif perm_type == 'table':
+            resources['tables'].append(perm_name)
+    
+    return resources
+
+
+def log_activity(user_id: int, action: str, resource_type: str = None, resource_name: str = None):
+    """Log user activity."""
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    
+    ip_address = request.remote_addr
+    
+    cursor.execute('''
+        INSERT INTO activity_log (user_id, action, resource_type, resource_name, ip_address)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (user_id, action, resource_type, resource_name, ip_address))
+    conn.commit()
+    conn.close()
+
+
+# ============================================================================
+# YAML File Processing
+# ============================================================================
+
+def load_yaml_files() -> Dict[str, Any]:
+    """Load all YAML files from the configured directory."""
+    yaml_data = {}
+    yaml_dir = app.config['YAML_DIRECTORY']
+    
+    if not os.path.exists(yaml_dir):
+        return yaml_data
+    
+    for filename in os.listdir(yaml_dir):
+        if filename.endswith('.yml') or filename.endswith('.yaml'):
+            filepath = os.path.join(yaml_dir, filename)
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    data = yaml.safe_load(f)
+                    yaml_data[filename] = data
+            except Exception as e:
+                print(f"Error loading {filename}: {e}")
+    
+    return yaml_data
+
+
+def search_metadata(query: str, user_id: int, filters: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+    """
+    Search metadata with RBAC filtering.
+    """
+    yaml_data = load_yaml_files()
+    results = []
+    query_lower = query.lower()
+    
+    for filename, data in yaml_data.items():
+        if not data or 'models' not in data:
+            continue
+        
+        schema_name = filename.replace('schema_', '').replace('.yml', '').replace('.yaml', '')
+        
+        # Check if user has access to this schema
+        if not check_resource_access(user_id, 'database', schema_name):
+            continue
+        
+        for model in data.get('models', []):
+            table_name = model.get('name', '')
+            
+            # Apply filters
+            if filters:
+                if filters.get('schema') and schema_name != filters['schema']:
+                    continue
+                if filters.get('table_type'):
+                    table_type = model.get('meta', {}).get('table_type', '')
+                    if table_type != filters['table_type']:
+                        continue
+            
+            # Search in table name
+            if query_lower in table_name.lower():
+                results.append({
+                    'type': 'table',
+                    'schema': schema_name,
+                    'table': table_name,
+                    'description': model.get('description', ''),
+                    'meta': model.get('meta', {}),
+                    'column_count': len(model.get('columns', []))
+                })
+            
+            # Search in table description
+            table_desc = model.get('description', '')
+            if table_desc and query_lower in table_desc.lower():
+                if not any(r['table'] == table_name and r['schema'] == schema_name and r['type'] == 'table' for r in results):
+                    results.append({
+                        'type': 'table',
+                        'schema': schema_name,
+                        'table': table_name,
+                        'description': table_desc,
+                        'meta': model.get('meta', {}),
+                        'column_count': len(model.get('columns', []))
+                    })
+            
+            # Search in columns
+            for column in model.get('columns', []):
+                column_name = column.get('name', '')
+                column_desc = column.get('description', '')
+                
+                if query_lower in column_name.lower() or (column_desc and query_lower in column_desc.lower()):
+                    results.append({
+                        'type': 'column',
+                        'schema': schema_name,
+                        'table': table_name,
+                        'column': column_name,
+                        'data_type': column.get('data_type', ''),
+                        'description': column_desc,
+                        'meta': column.get('meta', {})
+                    })
+    
+    return results
+
+
+def get_table_details(schema: str, table: str, user_id: int) -> Optional[Dict[str, Any]]:
+    """Get detailed information about a specific table."""
+    if not check_resource_access(user_id, 'database', schema):
+        return None
+    
+    yaml_data = load_yaml_files()
+    
+    for filename, data in yaml_data.items():
+        file_schema = filename.replace('schema_', '').replace('.yml', '').replace('.yaml', '')
+        
+        if file_schema != schema:
+            continue
+        
+        for model in data.get('models', []):
+            if model.get('name') == table:
+                return {
+                    'schema': schema,
+                    'table': table,
+                    'description': model.get('description', ''),
+                    'meta': model.get('meta', {}),
+                    'columns': model.get('columns', [])
+                }
+    
+    return None
+
+
+# ============================================================================
+# PDF Export Functions (NEW)
+# ============================================================================
+
+def generate_pdf_export(user_id: int, export_type: str = 'full', resources: List[str] = None) -> bytes:
+    """
+    Generate PDF export of data dictionary.
+    
+    Args:
+        user_id: User requesting export
+        export_type: 'full' or 'filtered'
+        resources: List of specific resources to export (schemas or tables)
+    
+    Returns:
+        PDF file as bytes
+    """
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.75*inch, bottomMargin=0.75*inch)
+    
+    # Container for PDF elements
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    # Title style
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=24,
+        textColor=colors.HexColor('#2563eb'),
+        spaceAfter=30,
+        alignment=1  # Center
+    )
+    
+    # Add title
+    elements.append(Paragraph("Data Dictionary", title_style))
+    elements.append(Spacer(1, 0.2*inch))
+    
+    # Add metadata
+    user = User.get(user_id)
+    meta_data = [
+        ['Generated by:', user.username],
+        ['Generated at:', datetime.now().strftime('%Y-%m-%d %H:%M:%S')],
+        ['Export type:', export_type.capitalize()]
+    ]
+    
+    meta_table = Table(meta_data, colWidths=[2*inch, 4*inch])
+    meta_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('TEXTCOLOR', (0, 0), (0, -1), colors.grey),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+    ]))
+    
+    elements.append(meta_table)
+    elements.append(Spacer(1, 0.3*inch))
+    
+    # Load YAML data
+    yaml_data = load_yaml_files()
+    
+    # Get accessible resources
+    accessible_resources = get_user_accessible_resources(user_id)
+    
+    # Filter by user permissions
+    for filename, data in yaml_data.items():
+        if not data or 'models' not in data:
+            continue
+        
+        schema_name = filename.replace('schema_', '').replace('.yml', '').replace('.yaml', '')
+        
+        # Check access
+        if schema_name not in accessible_resources['databases']:
+            continue
+        
+        # Schema header
+        elements.append(Paragraph(f"Schema: {schema_name}", styles['Heading2']))
+        elements.append(Spacer(1, 0.1*inch))
+        
+        # Process each table
+        for model in data.get('models', []):
+            table_name = model.get('name', '')
+            
+            # Table name
+            elements.append(Paragraph(f"Table: {table_name}", styles['Heading3']))
+            
+            # Table description
+            desc = model.get('description', 'No description')
+            elements.append(Paragraph(f"<i>{desc}</i>", styles['Normal']))
+            elements.append(Spacer(1, 0.1*inch))
+            
+            # Columns table
+            columns = model.get('columns', [])
+            if columns:
+                col_data = [['Column', 'Type', 'Description']]
+                
+                for col in columns:
+                    col_data.append([
+                        col.get('name', ''),
+                        col.get('data_type', ''),
+                        col.get('description', '')[:50] + '...' if len(col.get('description', '')) > 50 else col.get('description', '')
+                    ])
+                
+                col_table = Table(col_data, colWidths=[1.5*inch, 1.5*inch, 3.5*inch])
+                col_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2563eb')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 10),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 1), (-1, -1), 8),
+                ]))
+                
+                elements.append(col_table)
+            
+            elements.append(Spacer(1, 0.3*inch))
+        
+        elements.append(PageBreak())
+    
+    # Build PDF
+    doc.build(elements)
+    
+    # Log export
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO export_log (user_id, export_type, resources_exported, file_size)
+        VALUES (?, ?, ?, ?)
+    ''', (user_id, export_type, ','.join(accessible_resources['databases']), buffer.tell()))
+    conn.commit()
+    conn.close()
+    
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+# ============================================================================
+# API Endpoints - Authentication
+# ============================================================================
+
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    """User login endpoint."""
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+    
+    if not username or not password:
+        return jsonify({'error': 'Username and password required'}), 400
+    
+    user_data = User.get_by_username(username)
+    
+    if not user_data:
+        return jsonify({'error': 'Invalid credentials'}), 401
+    
+    user_id, db_username, email, role, password_hash, can_export = user_data
+    
+    if not check_password_hash(password_hash, password):
+        return jsonify({'error': 'Invalid credentials'}), 401
+    
+    # Create user object and login
+    user = User(user_id, db_username, email, role, can_export)
+    login_user(user)
+    
+    # Update last login
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    cursor.execute('UPDATE users SET last_login = ? WHERE id = ?', (datetime.now(), user_id))
+    conn.commit()
+    conn.close()
+    
+    # Log activity
+    log_activity(user_id, 'login')
+    
+    # Generate JWT token
+    token = jwt.encode({
+        'user_id': user_id,
+        'username': username,
+        'role': role,
+        'exp': datetime.utcnow() + app.config['JWT_ACCESS_TOKEN_EXPIRES']
+    }, app.config['JWT_SECRET_KEY'], algorithm='HS256')
+    
+    return jsonify({
+        'success': True,
+        'token': token,
+        'user': {
+            'id': user_id,
+            'username': username,
+            'email': email,
+            'role': role,
+            'can_export': can_export
+        }
+    })
+
+
+@app.route('/api/auth/signup', methods=['POST'])
+def signup():
+    """User signup endpoint (open registration or invite-only based on config)."""
+    data = request.get_json()
+    username = data.get('username')
+    email = data.get('email')
+    password = data.get('password')
+    
+    if not all([username, email, password]):
+        return jsonify({'error': 'All fields required'}), 400
+    
+    # Validate password strength
+    if len(password) < 8:
+        return jsonify({'error': 'Password must be at least 8 characters'}), 400
+    
+    # Check if user exists
+    if User.get_by_username(username):
+        return jsonify({'error': 'Username already exists'}), 409
+    
+    if User.get_by_email(email):
+        return jsonify({'error': 'Email already exists'}), 409
+    
+    # Create user with viewer role by default
+    password_hash = generate_password_hash(password)
+    
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            INSERT INTO users (username, email, password_hash, role, can_export)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (username, email, password_hash, 'viewer', 0))
+        conn.commit()
+        user_id = cursor.lastrowid
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Account created successfully',
+            'user_id': user_id
+        }), 201
+        
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({'error': 'Username or email already exists'}), 409
+
+
+@app.route('/api/auth/logout', methods=['POST'])
+@login_required
+def logout():
+    """User logout endpoint."""
+    log_activity(current_user.id, 'logout')
+    logout_user()
+    return jsonify({'success': True})
+
+
+@app.route('/api/auth/me', methods=['GET'])
+@login_required
+def get_current_user():
+    """Get current logged-in user information."""
+    return jsonify({
+        'id': current_user.id,
+        'username': current_user.username,
+        'email': current_user.email,
+        'role': current_user.role,
+        'can_export': current_user.can_export
+    })
+
+
+@app.route('/api/auth/change-password', methods=['POST'])
+@login_required
+def change_password():
+    """Change user password."""
+    data = request.get_json()
+    current_password = data.get('current_password')
+    new_password = data.get('new_password')
+    
+    if not all([current_password, new_password]):
+        return jsonify({'error': 'Both passwords required'}), 400
+    
+    if len(new_password) < 8:
+        return jsonify({'error': 'Password must be at least 8 characters'}), 400
+    
+    # Verify current password
+    user_data = User.get_by_username(current_user.username)
+    if not check_password_hash(user_data[4], current_password):
+        return jsonify({'error': 'Current password incorrect'}), 401
+    
+    # Update password
+    new_hash = generate_password_hash(new_password)
+    
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    cursor.execute('UPDATE users SET password_hash = ? WHERE id = ?', (new_hash, current_user.id))
+    conn.commit()
+    conn.close()
+    
+    log_activity(current_user.id, 'password_change')
+    
+    return jsonify({'success': True, 'message': 'Password changed successfully'})
+
+
+# ============================================================================
+# API Endpoints - Search & Browse
+# ============================================================================
+
+@app.route('/api/search', methods=['GET'])
+@login_required
+def search():
+    """Search endpoint with RBAC filtering."""
+    query = request.args.get('q', '')
+    schema_filter = request.args.get('schema')
+    table_type_filter = request.args.get('table_type')
+    
+    if not query or len(query) < 2:
+        return jsonify({'error': 'Query must be at least 2 characters'}), 400
+    
+    filters = {}
+    if schema_filter:
+        filters['schema'] = schema_filter
+    if table_type_filter:
+        filters['table_type'] = table_type_filter
+    
+    results = search_metadata(query, current_user.id, filters)
+    
+    log_activity(current_user.id, 'search', resource_name=query)
+    
+    return jsonify({
+        'query': query,
+        'results': results,
+        'count': len(results)
+    })
+
+
+@app.route('/api/schemas', methods=['GET'])
+@login_required
+def get_schemas():
+    """Get list of schemas/databases the user has access to."""
+    yaml_data = load_yaml_files()
+    schemas = []
+    
+    for filename in yaml_data.keys():
+        schema_name = filename.replace('schema_', '').replace('.yml', '').replace('.yaml', '')
+        
+        if check_resource_access(current_user.id, 'database', schema_name):
+            table_count = len(yaml_data[filename].get('models', []))
+            schemas.append({
+                'name': schema_name,
+                'table_count': table_count
+            })
+    
+    return jsonify({'schemas': schemas})
+
+
+@app.route('/api/schemas/<schema>/tables', methods=['GET'])
+@login_required
+def get_tables(schema):
+    """Get tables in a specific schema."""
+    if not check_resource_access(current_user.id, 'database', schema):
+        return jsonify({'error': 'Access denied'}), 403
+    
+    yaml_data = load_yaml_files()
+    tables = []
+    
+    for filename, data in yaml_data.items():
+        file_schema = filename.replace('schema_', '').replace('.yml', '').replace('.yaml', '')
+        
+        if file_schema == schema:
+            for model in data.get('models', []):
+                tables.append({
+                    'name': model.get('name'),
+                    'description': model.get('description', ''),
+                    'column_count': len(model.get('columns', [])),
+                    'meta': model.get('meta', {})
+                })
+            break
+    
+    log_activity(current_user.id, 'browse_tables', 'schema', schema)
+    
+    return jsonify({'schema': schema, 'tables': tables})
+
+
+@app.route('/api/schemas/<schema>/tables/<table>', methods=['GET'])
+@login_required
+def get_table(schema, table):
+    """Get detailed information about a specific table."""
+    if not check_resource_access(current_user.id, 'database', schema):
+        return jsonify({'error': 'Access denied'}), 403
+    
+    table_data = get_table_details(schema, table, current_user.id)
+    
+    if not table_data:
+        return jsonify({'error': 'Table not found'}), 404
+    
+    log_activity(current_user.id, 'view_table', 'table', f"{schema}.{table}")
+    
+    return jsonify(table_data)
+
+
+@app.route('/api/stats', methods=['GET'])
+@login_required
+def get_stats():
+    """Get statistics about the data dictionary."""
+    yaml_data = load_yaml_files()
+    
+    total_schemas = 0
+    total_tables = 0
+    total_columns = 0
+    
+    for filename, data in yaml_data.items():
+        schema_name = filename.replace('schema_', '').replace('.yml', '').replace('.yaml', '')
+        
+        if not check_resource_access(current_user.id, 'database', schema_name):
+            continue
+        
+        total_schemas += 1
+        for model in data.get('models', []):
+            total_tables += 1
+            total_columns += len(model.get('columns', []))
+    
+    return jsonify({
+        'schemas': total_schemas,
+        'tables': total_tables,
+        'columns': total_columns
+    })
+
+
+# ============================================================================
+# API Endpoints - User Groups (NEW)
+# ============================================================================
+
+@app.route('/api/groups', methods=['GET'])
+@role_required('admin', 'contributor')
+def get_groups():
+    """Get all user groups."""
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT g.id, g.name, g.description, g.created_at, u.username as created_by,
+               COUNT(ugm.user_id) as member_count
+        FROM user_groups g
+        LEFT JOIN users u ON g.created_by = u.id
+        LEFT JOIN user_group_members ugm ON g.id = ugm.group_id
+        GROUP BY g.id
+    ''')
+    
+    groups = []
+    for row in cursor.fetchall():
+        groups.append({
+            'id': row[0],
+            'name': row[1],
+            'description': row[2],
+            'created_at': row[3],
+            'created_by': row[4],
+            'member_count': row[5]
+        })
+    
+    conn.close()
+    return jsonify({'groups': groups})
+
+
+@app.route('/api/groups', methods=['POST'])
+@role_required('admin')
+def create_group():
+    """Create a new user group."""
+    data = request.get_json()
+    name = data.get('name')
+    description = data.get('description', '')
+    
+    if not name:
+        return jsonify({'error': 'Group name required'}), 400
+    
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            INSERT INTO user_groups (name, description, created_by)
+            VALUES (?, ?, ?)
+        ''', (name, description, current_user.id))
+        conn.commit()
+        group_id = cursor.lastrowid
+        conn.close()
+        
+        log_activity(current_user.id, 'create_group', 'group', name)
+        
+        return jsonify({'success': True, 'group_id': group_id}), 201
+        
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({'error': 'Group name already exists'}), 409
+
+
+@app.route('/api/groups/<int:group_id>/members', methods=['GET'])
+@role_required('admin', 'contributor')
+def get_group_members(group_id):
+    """Get members of a group."""
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT u.id, u.username, u.email, u.role, ugm.added_at
+        FROM users u
+        JOIN user_group_members ugm ON u.id = ugm.user_id
+        WHERE ugm.group_id = ?
+    ''', (group_id,))
+    
+    members = []
+    for row in cursor.fetchall():
+        members.append({
+            'id': row[0],
+            'username': row[1],
+            'email': row[2],
+            'role': row[3],
+            'added_at': row[4]
+        })
+    
+    conn.close()
+    return jsonify({'members': members})
+
+
+@app.route('/api/groups/<int:group_id>/members', methods=['POST'])
+@role_required('admin')
+def add_group_member(group_id):
+    """Add user to group."""
+    data = request.get_json()
+    user_id = data.get('user_id')
+    
+    if not user_id:
+        return jsonify({'error': 'User ID required'}), 400
+    
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            INSERT INTO user_group_members (user_id, group_id, added_by)
+            VALUES (?, ?, ?)
+        ''', (user_id, group_id, current_user.id))
+        conn.commit()
+        conn.close()
+        
+        log_activity(current_user.id, 'add_user_to_group', 'group', str(group_id))
+        
+        return jsonify({'success': True}), 201
+        
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({'error': 'User already in group'}), 409
+
+
+@app.route('/api/groups/<int:group_id>/members/<int:user_id>', methods=['DELETE'])
+@role_required('admin')
+def remove_group_member(group_id, user_id):
+    """Remove user from group."""
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    
+    cursor.execute('DELETE FROM user_group_members WHERE group_id = ? AND user_id = ?', (group_id, user_id))
+    conn.commit()
+    conn.close()
+    
+    log_activity(current_user.id, 'remove_user_from_group', 'group', str(group_id))
+    
+    return jsonify({'success': True})
+
+
+@app.route('/api/groups/<int:group_id>/permissions', methods=['GET'])
+@role_required('admin')
+def get_group_permissions(group_id):
+    """Get permissions for a group."""
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT id, resource_type, resource_name, permission_level
+        FROM group_permissions
+        WHERE group_id = ?
+    ''', (group_id,))
+    
+    permissions = []
+    for row in cursor.fetchall():
+        permissions.append({
+            'id': row[0],
+            'resource_type': row[1],
+            'resource_name': row[2],
+            'permission_level': row[3]
+        })
+    
+    conn.close()
+    return jsonify({'permissions': permissions})
+
+
+@app.route('/api/groups/<int:group_id>/permissions', methods=['POST'])
+@role_required('admin')
+def grant_group_permission(group_id):
+    """Grant permission to a group."""
+    data = request.get_json()
+    resource_type = data.get('resource_type')
+    resource_name = data.get('resource_name')
+    permission_level = data.get('permission_level', 'read')
+    
+    if not all([resource_type, resource_name]):
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT INTO group_permissions (group_id, resource_type, resource_name, permission_level)
+        VALUES (?, ?, ?, ?)
+    ''', (group_id, resource_type, resource_name, permission_level))
+    
+    conn.commit()
+    permission_id = cursor.lastrowid
+    conn.close()
+    
+    log_activity(current_user.id, 'grant_group_permission', resource_type, resource_name)
+    
+    return jsonify({'success': True, 'permission_id': permission_id}), 201
+
+
+@app.route('/api/groups/<int:group_id>/permissions/<int:permission_id>', methods=['DELETE'])
+@role_required('admin')
+def revoke_group_permission(group_id, permission_id):
+    """Revoke a group permission."""
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    
+    cursor.execute('DELETE FROM group_permissions WHERE id = ? AND group_id = ?', (permission_id, group_id))
+    conn.commit()
+    conn.close()
+    
+    log_activity(current_user.id, 'revoke_group_permission', resource_name=str(permission_id))
+    
+    return jsonify({'success': True})
+
+
+# ============================================================================
+# API Endpoints - PDF Export (NEW)
+# ============================================================================
+
+@app.route('/api/export/pdf', methods=['POST'])
+@export_permission_required
+def export_pdf():
+    """Export data dictionary as PDF."""
+    data = request.get_json()
+    export_type = data.get('type', 'full')  # 'full' or 'filtered'
+    resources = data.get('resources', [])  # Specific resources to export
+    
+    try:
+        pdf_data = generate_pdf_export(current_user.id, export_type, resources)
+        
+        log_activity(current_user.id, 'export_pdf', export_type)
+        
+        return send_file(
+            io.BytesIO(pdf_data),
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f'data_dictionary_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
+        )
+        
+    except Exception as e:
+        return jsonify({'error': f'Export failed: {str(e)}'}), 500
+
+
+@app.route('/api/export/check-permission', methods=['GET'])
+@login_required
+def check_export_permission():
+    """Check if current user can export."""
+    return jsonify({
+        'can_export': current_user.can_export or current_user.role == 'admin'
+    })
+
+
+# ============================================================================
+# API Endpoints - Admin (User & Permission Management)
+# ============================================================================
+
+@app.route('/api/admin/users', methods=['GET'])
+@role_required('admin')
+def get_users():
+    """Get all users (admin only)."""
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    cursor.execute('SELECT id, username, email, role, created_at, last_login, is_active, can_export FROM users')
+    users = []
+    
+    for row in cursor.fetchall():
+        users.append({
+            'id': row[0],
+            'username': row[1],
+            'email': row[2],
+            'role': row[3],
+            'created_at': row[4],
+            'last_login': row[5],
+            'is_active': bool(row[6]),
+            'can_export': bool(row[7])
+        })
+    
+    conn.close()
+    return jsonify({'users': users})
+
+
+@app.route('/api/admin/users', methods=['POST'])
+@role_required('admin')
+def create_user():
+    """Create a new user (admin only)."""
+    data = request.get_json()
+    username = data.get('username')
+    email = data.get('email')
+    password = data.get('password')
+    role = data.get('role', 'viewer')
+    can_export = data.get('can_export', False)
+    
+    if not all([username, email, password]):
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    if role not in ['admin', 'contributor', 'viewer']:
+        return jsonify({'error': 'Invalid role'}), 400
+    
+    password_hash = generate_password_hash(password)
+    
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            INSERT INTO users (username, email, password_hash, role, can_export)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (username, email, password_hash, role, can_export))
+        conn.commit()
+        user_id = cursor.lastrowid
+        
+        log_activity(current_user.id, 'create_user', 'user', username)
+        
+        conn.close()
+        return jsonify({'success': True, 'user_id': user_id}), 201
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({'error': 'Username or email already exists'}), 409
+
+
+@app.route('/api/admin/users/<int:user_id>', methods=['PATCH'])
+@role_required('admin')
+def update_user(user_id):
+    """Update user properties (admin only)."""
+    data = request.get_json()
+    
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    
+    # Build update query dynamically
+    updates = []
+    values = []
+    
+    if 'role' in data:
+        updates.append('role = ?')
+        values.append(data['role'])
+    
+    if 'can_export' in data:
+        updates.append('can_export = ?')
+        values.append(int(data['can_export']))
+    
+    if 'is_active' in data:
+        updates.append('is_active = ?')
+        values.append(int(data['is_active']))
+    
+    if not updates:
+        return jsonify({'error': 'No fields to update'}), 400
+    
+    values.append(user_id)
+    query = f"UPDATE users SET {', '.join(updates)} WHERE id = ?"
+    
+    cursor.execute(query, values)
+    conn.commit()
+    conn.close()
+    
+    log_activity(current_user.id, 'update_user', 'user', str(user_id))
+    
+    return jsonify({'success': True})
+
+
+@app.route('/api/admin/users/<int:user_id>/permissions', methods=['GET'])
+@role_required('admin')
+def get_user_permissions(user_id):
+    """Get permissions for a specific user."""
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT id, resource_type, resource_name, permission_level
+        FROM permissions WHERE user_id = ?
+    ''', (user_id,))
+    
+    permissions = []
+    for row in cursor.fetchall():
+        permissions.append({
+            'id': row[0],
+            'resource_type': row[1],
+            'resource_name': row[2],
+            'permission_level': row[3]
+        })
+    
+    conn.close()
+    return jsonify({'permissions': permissions})
+
+
+@app.route('/api/admin/users/<int:user_id>/permissions', methods=['POST'])
+@role_required('admin')
+def grant_permission(user_id):
+    """Grant permission to a user."""
+    data = request.get_json()
+    resource_type = data.get('resource_type')
+    resource_name = data.get('resource_name')
+    permission_level = data.get('permission_level', 'read')
+    
+    if not all([resource_type, resource_name]):
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT INTO permissions (user_id, resource_type, resource_name, permission_level)
+        VALUES (?, ?, ?, ?)
+    ''', (user_id, resource_type, resource_name, permission_level))
+    
+    conn.commit()
+    permission_id = cursor.lastrowid
+    conn.close()
+    
+    log_activity(current_user.id, 'grant_permission', resource_type, resource_name)
+    
+    return jsonify({'success': True, 'permission_id': permission_id}), 201
+
+
+@app.route('/api/admin/permissions/<int:permission_id>', methods=['DELETE'])
+@role_required('admin')
+def revoke_permission(permission_id):
+    """Revoke a permission."""
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    
+    cursor.execute('DELETE FROM permissions WHERE id = ?', (permission_id,))
+    conn.commit()
+    conn.close()
+    
+    log_activity(current_user.id, 'revoke_permission', resource_name=str(permission_id))
+    
+    return jsonify({'success': True})
+
+
+# ============================================================================
+# HTML Page Routes
+# ============================================================================
+
+@app.route('/')
+def index():
+    """Serve the main application page (requires login)."""
+    return render_template('index.html')
+
+
+@app.route('/signin')
+def signin_page():
+    """Serve the signin page."""
+    return render_template('signin.html')
+
+
+@app.route('/signup')
+def signup_page():
+    """Serve the signup page."""
+    return render_template('signup.html')
+
+
+@app.route('/admin')
+def admin_panel():
+    """Serve the admin panel page (admin only)."""
+    # Note: Access control is done in JavaScript on page load
+    # Backend validation happens in API endpoints
+    return render_template('admin.html')
+
+
+@app.route('/profile')
+def profile():
+    """Serve the user profile page."""
+    return render_template('profile.html')
+
+
+@app.route('/groups')
+def groups_page():
+    """Serve the groups management page (admin only)."""
+    return render_template('groups.html')
+
+
+# Add logout endpoint if not already present
+@app.route('/logout')
+def logout_page():
+    """Logout and redirect to signin."""
+    logout_user()
+    return redirect('/signin')
+
+# ============================================================================
+# Main
+# ============================================================================
+
+if __name__ == '__main__':
+    init_db()
+    app.run(debug=True, host='0.0.0.0', port=5000)

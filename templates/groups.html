@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Groups - Data Dictionary</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f3f4f6;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            font-size: 2rem;
+            color: #111827;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1e40af;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+
+        .card-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .card-body {
+            padding: 1.5rem;
+        }
+
+        .groups-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .group-card {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 1.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .group-card:hover {
+            border-color: #2563eb;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .group-name {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 0.5rem;
+        }
+
+        .group-description {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-bottom: 1rem;
+        }
+
+        .group-stats {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+        }
+
+        .modal-footer {
+            padding: 1.5rem;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+
+        .form-input,
+        .form-select,
+        .form-textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-family: inherit;
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .form-input:focus,
+        .form-select:focus,
+        .form-textarea:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #6ee7b7;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            text-align: left;
+            padding: 0.75rem;
+            background: #f3f4f6;
+            font-weight: 600;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-database {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .badge-table {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 1rem;
+            border-bottom: 2px solid #e5e7eb;
+            margin-bottom: 1.5rem;
+        }
+
+        .tab {
+            padding: 0.75rem 1.5rem;
+            background: none;
+            border: none;
+            font-size: 1rem;
+            font-weight: 500;
+            color: #6b7280;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+        }
+
+        .tab.active {
+            color: #2563eb;
+            border-bottom-color: #2563eb;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>👥 User Groups</h1>
+            <div style="display: flex; gap: 1rem;">
+                <a href="/admin" class="btn btn-secondary">Back to Admin</a>
+                <button class="btn btn-primary" onclick="showCreateGroupModal()">+ Create Group</button>
+            </div>
+        </div>
+
+        <div id="alertContainer"></div>
+
+        <!-- Groups Grid -->
+        <div class="card">
+            <div class="card-body">
+                <div class="groups-grid" id="groupsGrid">
+                    <p style="color: #6b7280;">Loading groups...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Group Modal -->
+    <div class="modal" id="createGroupModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Create New Group</h3>
+            </div>
+            <div class="modal-body">
+                <form id="createGroupForm">
+                    <div class="form-group">
+                        <label class="form-label">Group Name</label>
+                        <input type="text" class="form-input" id="groupName" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-textarea" id="groupDescription"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('createGroupModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="createGroup()">Create Group</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Group Details Modal -->
+    <div class="modal" id="groupDetailsModal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3 class="modal-title" id="groupDetailsTitle">Group Details</h3>
+            </div>
+            <div class="modal-body">
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab('members')">Members</button>
+                    <button class="tab" onclick="switchTab('permissions')">Permissions</button>
+                </div>
+
+                <!-- Members Tab -->
+                <div id="membersTab" class="tab-content active">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h4>Group Members</h4>
+                        <button class="btn btn-primary btn-sm" onclick="showAddMemberModal()">+ Add Member</button>
+                    </div>
+                    <table id="membersTable">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="membersTableBody">
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Permissions Tab -->
+                <div id="permissionsTab" class="tab-content">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h4>Group Permissions</h4>
+                        <button class="btn btn-primary btn-sm" onclick="showAddPermissionModal()">+ Add Permission</button>
+                    </div>
+                    <table id="permissionsTable">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Resource</th>
+                                <th>Level</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="permissionsTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('groupDetailsModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Member Modal -->
+    <div class="modal" id="addMemberModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Add Member to Group</h3>
+            </div>
+            <div class="modal-body">
+                <form id="addMemberForm">
+                    <div class="form-group">
+                        <label class="form-label">Select User</label>
+                        <select class="form-select" id="userSelect" required>
+                            <option value="">Choose a user...</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('addMemberModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="addMember()">Add Member</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Permission Modal -->
+    <div class="modal" id="addPermissionModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Add Permission to Group</h3>
+            </div>
+            <div class="modal-body">
+                <form id="addPermissionForm">
+                    <div class="form-group">
+                        <label class="form-label">Resource Type</label>
+                        <select class="form-select" id="permResourceType" required>
+                            <option value="database">Database/Schema</option>
+                            <option value="table">Table</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Resource Name</label>
+                        <input type="text" class="form-input" id="permResourceName" placeholder="e.g., production or public.customers" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Permission Level</label>
+                        <select class="form-select" id="permLevel" required>
+                            <option value="read">Read</option>
+                            <option value="write">Write</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('addPermissionModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="addPermission()">Add Permission</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '';
+        let currentGroupId = null;
+        let allUsers = [];
+
+        // Check admin access
+        window.addEventListener('DOMContentLoaded', async () => {
+            const user = JSON.parse(sessionStorage.getItem('user') || '{}');
+            
+            if (!user.username || user.role !== 'admin') {
+                alert('Admin access required');
+                window.location.href = '/signin';
+                return;
+            }
+
+            loadGroups();
+            loadAllUsers();
+        });
+
+        // API helper
+        async function apiCall(endpoint, options = {}) {
+            const response = await fetch(API_URL + endpoint, options);
+            if (response.status === 401) {
+                window.location.href = '/signin';
+                return null;
+            }
+            return response.json();
+        }
+
+        // Show alert
+        function showAlert(message, type = 'success') {
+            const container = document.getElementById('alertContainer');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+            container.appendChild(alert);
+
+            setTimeout(() => alert.remove(), 5000);
+        }
+
+        // Load all groups
+        async function loadGroups() {
+            const data = await apiCall('/api/groups');
+            if (!data) return;
+
+            const grid = document.getElementById('groupsGrid');
+            grid.innerHTML = '';
+
+            if (data.groups.length === 0) {
+                grid.innerHTML = '<p style="color: #6b7280;">No groups yet. Create your first group!</p>';
+                return;
+            }
+
+            data.groups.forEach(group => {
+                const card = document.createElement('div');
+                card.className = 'group-card';
+                card.onclick = () => showGroupDetails(group.id, group.name);
+                card.innerHTML = `
+                    <div class="group-name">${group.name}</div>
+                    <div class="group-description">${group.description || 'No description'}</div>
+                    <div class="group-stats">
+                        <span>👥 ${group.member_count} members</span>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        // Load all users
+        async function loadAllUsers() {
+            const data = await apiCall('/api/admin/users');
+            if (data) {
+                allUsers = data.users;
+            }
+        }
+
+        // Create group
+        async function createGroup() {
+            const name = document.getElementById('groupName').value.trim();
+            const description = document.getElementById('groupDescription').value.trim();
+
+            const data = await apiCall('/api/groups', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, description })
+            });
+
+            if (data && data.success) {
+                showAlert('Group created successfully');
+                closeModal('createGroupModal');
+                document.getElementById('createGroupForm').reset();
+                loadGroups();
+            } else {
+                showAlert(data.error || 'Failed to create group', 'error');
+            }
+        }
+
+        // Show group details
+        async function showGroupDetails(groupId, groupName) {
+            currentGroupId = groupId;
+            document.getElementById('groupDetailsTitle').textContent = groupName;
+            
+            await loadGroupMembers(groupId);
+            await loadGroupPermissions(groupId);
+            
+            document.getElementById('groupDetailsModal').classList.add('active');
+        }
+
+        // Load group members
+        async function loadGroupMembers(groupId) {
+            const data = await apiCall(`/api/groups/${groupId}/members`);
+            if (!data) return;
+
+            const tbody = document.getElementById('membersTableBody');
+            tbody.innerHTML = '';
+
+            if (data.members.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #6b7280;">No members yet</td></tr>';
+                return;
+            }
+
+            data.members.forEach(member => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><strong>${member.username}</strong></td>
+                    <td>${member.email}</td>
+                    <td>${member.role}</td>
+                    <td>
+                        <button class="btn btn-danger btn-sm" onclick="removeMember(${member.id})">Remove</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Load group permissions
+        async function loadGroupPermissions(groupId) {
+            const data = await apiCall(`/api/groups/${groupId}/permissions`);
+            if (!data) return;
+
+            const tbody = document.getElementById('permissionsTableBody');
+            tbody.innerHTML = '';
+
+            if (data.permissions.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #6b7280;">No permissions yet</td></tr>';
+                return;
+            }
+
+            data.permissions.forEach(perm => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><span class="badge badge-${perm.resource_type}">${perm.resource_type}</span></td>
+                    <td><code>${perm.resource_name}</code></td>
+                    <td>${perm.permission_level}</td>
+                    <td>
+                        <button class="btn btn-danger btn-sm" onclick="removePermission(${perm.id})">Remove</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Show add member modal
+        function showAddMemberModal() {
+            const select = document.getElementById('userSelect');
+            select.innerHTML = '<option value="">Choose a user...</option>';
+            
+            allUsers.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user.id;
+                option.textContent = `${user.username} (${user.role})`;
+                select.appendChild(option);
+            });
+
+            document.getElementById('addMemberModal').classList.add('active');
+        }
+
+        // Add member
+        async function addMember() {
+            const userId = document.getElementById('userSelect').value;
+            if (!userId) return;
+
+            const data = await apiCall(`/api/groups/${currentGroupId}/members`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: parseInt(userId) })
+            });
+
+            if (data && data.success) {
+                showAlert('Member added successfully');
+                closeModal('addMemberModal');
+                loadGroupMembers(currentGroupId);
+            } else {
+                showAlert(data.error || 'Failed to add member', 'error');
+            }
+        }
+
+        // Remove member
+        async function removeMember(userId) {
+            if (!confirm('Remove this member from the group?')) return;
+
+            const data = await apiCall(`/api/groups/${currentGroupId}/members/${userId}`, {
+                method: 'DELETE'
+            });
+
+            if (data && data.success) {
+                showAlert('Member removed');
+                loadGroupMembers(currentGroupId);
+            } else {
+                showAlert('Failed to remove member', 'error');
+            }
+        }
+
+        // Show add permission modal
+        function showAddPermissionModal() {
+            document.getElementById('addPermissionModal').classList.add('active');
+        }
+
+        // Add permission
+        async function addPermission() {
+            const resourceType = document.getElementById('permResourceType').value;
+            const resourceName = document.getElementById('permResourceName').value.trim();
+            const permissionLevel = document.getElementById('permLevel').value;
+
+            const data = await apiCall(`/api/groups/${currentGroupId}/permissions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    resource_type: resourceType,
+                    resource_name: resourceName,
+                    permission_level: permissionLevel
+                })
+            });
+
+            if (data && data.success) {
+                showAlert('Permission added successfully');
+                closeModal('addPermissionModal');
+                document.getElementById('addPermissionForm').reset();
+                loadGroupPermissions(currentGroupId);
+            } else {
+                showAlert(data.error || 'Failed to add permission', 'error');
+            }
+        }
+
+        // Remove permission
+        async function removePermission(permId) {
+            if (!confirm('Remove this permission from the group?')) return;
+
+            const data = await apiCall(`/api/groups/${currentGroupId}/permissions/${permId}`, {
+                method: 'DELETE'
+            });
+
+            if (data && data.success) {
+                showAlert('Permission removed');
+                loadGroupPermissions(currentGroupId);
+            } else {
+                showAlert('Failed to remove permission', 'error');
+            }
+        }
+
+        // Tab switching
+        function switchTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.getElementById(`${tabName}Tab`).classList.add('active');
+        }
+
+        // Modal functions
+        function showCreateGroupModal() {
+            document.getElementById('createGroupModal').classList.add('active');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        // Close modal on outside click
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.remove('active');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

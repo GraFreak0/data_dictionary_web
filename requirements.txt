@@ -1,0 +1,35 @@
+# Data Dictionary Web UI - Complete Requirements
+# Updated with all dependencies for new features
+
+# Flask Framework
+Flask==3.0.0
+Flask-CORS==4.0.0
+Flask-Login==0.6.3
+
+# Security
+PyJWT==2.8.0
+Werkzeug==3.0.1
+
+# Data Processing
+PyYAML==6.0.1
+
+# PDF Export (NEW)
+reportlab==4.0.7
+
+# Environment Variables (NEW)
+python-dotenv==1.0.0
+
+# Database
+# SQLite is built-in, no additional requirement
+
+# Optional: For production deployment
+gunicorn==21.2.0
+
+# Optional: For PostgreSQL (if migrating from SQLite)
+# psycopg2-binary==2.9.9
+
+# Optional: For Redis caching
+# redis==5.0.1
+
+# CLI Support (if using CLI features)
+click==8.1.7
