@@ -1,471 +1,338 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Profile - Data Dictionary</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f3f4f6;
-            padding: 2rem;
-        }
-
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-        }
-
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-        }
-
-        h1 {
-            font-size: 2rem;
-            color: #111827;
-        }
-
-        .btn {
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 6px;
-            font-size: 1rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-            text-decoration: none;
-            display: inline-block;
-        }
-
-        .btn-secondary {
-            background: #6b7280;
-            color: white;
-        }
-
-        .btn-primary {
-            background: #2563eb;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #1e40af;
-        }
-
-        .card {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            padding: 2rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .card-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            margin-bottom: 1.5rem;
-            padding-bottom: 0.75rem;
-            border-bottom: 2px solid #e5e7eb;
-        }
-
-        .profile-grid {
-            display: grid;
-            grid-template-columns: 150px 1fr;
-            gap: 1rem;
-            margin-bottom: 1rem;
-        }
-
-        .profile-label {
-            font-weight: 600;
-            color: #6b7280;
-        }
-
-        .profile-value {
-            color: #111827;
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            border-radius: 4px;
-            font-size: 0.875rem;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-
-        .badge-admin {
-            background: #dbeafe;
-            color: #1e40af;
-        }
-
-        .badge-contributor {
-            background: #d1fae5;
-            color: #065f46;
-        }
-
-        .badge-viewer {
-            background: #e5e7eb;
-            color: #374151;
-        }
-
-        .badge-success {
-            background: #d1fae5;
-            color: #065f46;
-        }
-
-        .badge-danger {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-
-        .form-label {
-            display: block;
-            font-size: 0.875rem;
-            font-weight: 500;
-            margin-bottom: 0.5rem;
-            color: #374151;
-        }
-
-        .form-input {
-            width: 100%;
-            padding: 0.75rem;
-            border: 1px solid #d1d5db;
-            border-radius: 6px;
-            font-size: 1rem;
-        }
-
-        .form-input:focus {
-            outline: none;
-            border-color: #2563eb;
-            box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
-        }
-
-        .alert {
-            padding: 1rem;
-            border-radius: 6px;
-            margin-bottom: 1rem;
-        }
-
-        .alert-success {
-            background: #d1fae5;
-            color: #065f46;
-            border: 1px solid #6ee7b7;
-        }
-
-        .alert-error {
-            background: #fee2e2;
-            color: #991b1b;
-            border: 1px solid #fecaca;
-        }
-
-        .permissions-list {
-            list-style: none;
-        }
-
-        .permission-item {
-            padding: 0.75rem;
-            background: #f9fafb;
-            border-radius: 6px;
-            margin-bottom: 0.5rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .permission-resource {
-            font-family: 'Courier New', monospace;
-            color: #2563eb;
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-top: 1rem;
-        }
-
-        .stat-box {
-            background: #f9fafb;
-            padding: 1rem;
-            border-radius: 6px;
-            text-align: center;
-        }
-
-        .stat-value {
-            font-size: 2rem;
-            font-weight: 700;
-            color: #2563eb;
-        }
-
-        .stat-label {
-            font-size: 0.875rem;
-            color: #6b7280;
-            margin-top: 0.25rem;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Profile – Data Dictionary</title>
+  <link rel="stylesheet" href="/static/styles/main.css">
+  <script>(function(){const t=localStorage.getItem('theme')||'light';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>My Profile</h1>
-            <a href="/" class="btn btn-secondary">Back to Catalog</a>
+<div class="app-layout">
+
+  <!-- ═══════════════════════════════════════════════════════
+       SIDEBAR  (shared component)
+       ═══════════════════════════════════════════════════════ -->
+  {% include 'components/sidebar.html' %}
+
+  <!-- ═══════════════════════════════════════════════════════
+       MAIN AREA
+       ═══════════════════════════════════════════════════════ -->
+  <div class="main-area">
+
+    <!-- Top bar -->
+    <header class="topbar">
+      <span class="topbar-title">My Profile</span>
+      <div class="topbar-actions">
+        <button class="btn btn-secondary btn-sm" onclick="location.href='/'">← Catalog</button>
+        <button class="btn btn-danger btn-sm" onclick="logout()">Logout</button>
+      </div>
+    </header>
+
+    <div class="page-body">
+      <div id="globalAlert" class="alert"></div>
+
+      <!-- ── Avatar hero ─────────────────────────────────── -->
+      <div style="display:flex; align-items:center; gap:1.25rem; margin-bottom:1.75rem;
+                  padding:1.5rem; background:var(--bg-card); border:1px solid var(--border);
+                  border-radius:12px; box-shadow:var(--shadow);">
+        <div id="heroAvatar"
+             style="width:72px; height:72px; border-radius:50%; background:var(--primary);
+                    color:#fff; font-size:1.875rem; font-weight:700;
+                    display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+          ?
         </div>
+        <div>
+          <div id="heroName" style="font-size:1.5rem; font-weight:700;">Loading…</div>
+          <div id="heroMeta" style="color:var(--text-secondary); font-size:.9rem; margin-top:.2rem;"></div>
+        </div>
+        <div style="margin-left:auto; display:flex; gap:.625rem; flex-wrap:wrap;">
+          <span class="badge" id="heroBadgeRole">–</span>
+          <span class="badge" id="heroBadgeExport">–</span>
+        </div>
+      </div>
 
-        <div id="alertContainer"></div>
+      <!-- ── Activity stats row ──────────────────────────── -->
+      <div class="stats-row" style="margin-bottom:1.5rem;">
+        <div class="stat-card">
+          <div class="stat-value" id="statSearches">–</div>
+          <div class="stat-label">Searches</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statViews">–</div>
+          <div class="stat-label">Tables Viewed</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statExports">–</div>
+          <div class="stat-label">PDF Exports</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statGroups">–</div>
+          <div class="stat-label">Groups</div>
+        </div>
+      </div>
 
-        <!-- Profile Information -->
-        <div class="card">
-            <h2 class="card-title">Profile Information</h2>
-            <div class="profile-grid">
-                <div class="profile-label">Username:</div>
-                <div class="profile-value" id="username">-</div>
+      <!-- ── Two-column grid ─────────────────────────────── -->
+      <div style="display:grid; grid-template-columns:1fr 1fr;
+                  gap:1.25rem; align-items:start;">
 
-                <div class="profile-label">Email:</div>
-                <div class="profile-value" id="email">-</div>
+        <!-- ── LEFT COLUMN ────────────────────────────────── -->
+        <div style="display:flex; flex-direction:column; gap:1.25rem;">
 
-                <div class="profile-label">Role:</div>
-                <div class="profile-value">
-                    <span class="badge" id="roleBadge">-</span>
-                </div>
-
-                <div class="profile-label">Export Permission:</div>
-                <div class="profile-value">
-                    <span class="badge" id="exportBadge">-</span>
-                </div>
-
-                <div class="profile-label">Member Since:</div>
-                <div class="profile-value" id="memberSince">-</div>
-
-                <div class="profile-label">Last Login:</div>
-                <div class="profile-value" id="lastLogin">-</div>
+          <!-- Profile info -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">👤 Profile Information</span>
             </div>
-        </div>
+            <div class="card-body">
+              <div class="info-grid">
+                <div class="info-label">Username</div>
+                <div id="pUsername" style="font-weight:600;">–</div>
 
-        <!-- Change Password -->
-        <div class="card">
-            <h2 class="card-title">Change Password</h2>
-            <form id="changePasswordForm">
+                <div class="info-label">Email</div>
+                <div id="pEmail">–</div>
+
+                <div class="info-label">Role</div>
+                <div><span class="badge" id="pRole">–</span></div>
+
+                <div class="info-label">PDF Export</div>
+                <div><span class="badge" id="pExport">–</span></div>
+
+                <div class="info-label">Member Since</div>
+                <div id="pSince" style="color:var(--text-secondary);">–</div>
+
+                <div class="info-label">Last Login</div>
+                <div id="pLast"  style="color:var(--text-secondary);">–</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- My Groups -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">👥 My Groups</span>
+              <a href="/groups" class="btn btn-secondary btn-sm">Manage Groups →</a>
+            </div>
+            <div class="card-body" id="groupsBody">
+              <p style="color:var(--text-muted);">Loading…</p>
+            </div>
+          </div>
+
+        </div><!-- /left col -->
+
+        <!-- ── RIGHT COLUMN ───────────────────────────────── -->
+        <div style="display:flex; flex-direction:column; gap:1.25rem;">
+
+          <!-- Change password -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">🔑 Change Password</span>
+            </div>
+            <div class="card-body">
+              <div id="pwAlert" class="alert"></div>
+              <form id="changePwForm" novalidate>
                 <div class="form-group">
-                    <label class="form-label">Current Password</label>
-                    <input type="password" class="form-input" id="currentPassword" required>
+                  <label class="form-label">Current Password</label>
+                  <input class="form-input" type="password" id="pwCur"
+                         autocomplete="current-password" placeholder="••••••••">
                 </div>
-
                 <div class="form-group">
-                    <label class="form-label">New Password</label>
-                    <input type="password" class="form-input" id="newPassword" required minlength="8">
-                    <small style="color: #6b7280;">Must be at least 8 characters</small>
+                  <label class="form-label">New Password</label>
+                  <input class="form-input" type="password" id="pwNew"
+                         minlength="8" autocomplete="new-password"
+                         placeholder="Min 8 characters" oninput="checkPwStrength(this.value)">
+                  <div class="pw-bar-wrap"><div class="pw-bar" id="pwBar"></div></div>
                 </div>
-
                 <div class="form-group">
-                    <label class="form-label">Confirm New Password</label>
-                    <input type="password" class="form-input" id="confirmPassword" required>
+                  <label class="form-label">Confirm New Password</label>
+                  <input class="form-input" type="password" id="pwCf"
+                         autocomplete="new-password" placeholder="Re-enter new password">
                 </div>
-
                 <button type="submit" class="btn btn-primary">Change Password</button>
-            </form>
-        </div>
-
-        <!-- My Permissions -->
-        <div class="card">
-            <h2 class="card-title">My Permissions</h2>
-            <div id="permissionsContainer">
-                <p style="color: #6b7280;">Loading permissions...</p>
+              </form>
             </div>
-        </div>
+          </div>
 
-        <!-- My Groups -->
-        <div class="card">
-            <h2 class="card-title">My Groups</h2>
-            <div id="groupsContainer">
-                <p style="color: #6b7280;">Loading groups...</p>
+          <!-- My Permissions -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">🔐 My Permissions</span>
             </div>
-        </div>
-
-        <!-- Activity Stats -->
-        <div class="card">
-            <h2 class="card-title">My Activity</h2>
-            <div class="stats-grid">
-                <div class="stat-box">
-                    <div class="stat-value" id="statSearches">0</div>
-                    <div class="stat-label">Searches</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-value" id="statViews">0</div>
-                    <div class="stat-label">Tables Viewed</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-value" id="statExports">0</div>
-                    <div class="stat-label">Exports</div>
-                </div>
+            <div class="card-body" id="permsBody">
+              <p style="color:var(--text-muted);">Loading…</p>
             </div>
-        </div>
-    </div>
+          </div>
 
-    <script>
-        const API_URL = '';
+        </div><!-- /right col -->
+      </div><!-- /two-col grid -->
 
-        // Show alert
-        function showAlert(message, type = 'success') {
-            const container = document.getElementById('alertContainer');
-            const alert = document.createElement('div');
-            alert.className = `alert alert-${type}`;
-            alert.textContent = message;
-            container.appendChild(alert);
+    </div><!-- /page-body -->
+  </div><!-- /main-area -->
+</div><!-- /app-layout -->
 
-            setTimeout(() => {
-                alert.remove();
-            }, 5000);
-        }
+<!-- ═══════════════════════════════════════════════════════════
+     FOOTER  (shared component)
+     ═══════════════════════════════════════════════════════════ -->
+{% include 'components/footer.html' %}
 
-        // Load user profile
-        async function loadProfile() {
-            try {
-                const response = await fetch(`${API_URL}/api/auth/me`);
-                if (!response.ok) {
-                    window.location.href = '/';
-                    return;
-                }
+<!-- ═══════════════════════════════════════════════════════════
+     SCRIPTS
+     ═══════════════════════════════════════════════════════════ -->
+<script src="/static/scripts/app.js"></script>
+<script>
+/* ── Init ───────────────────────────────────────────────────── */
+window.addEventListener('DOMContentLoaded', async () => {
+  const user = getUser();
+  if (!user) { location.href = '/signin'; return; }
+  initSidebar(user);
+  await loadProfile();
+});
 
-                const user = await response.json();
+/* ── Load profile ───────────────────────────────────────────── */
+async function loadProfile() {
+  const d = await api('/api/auth/me');
+  if (!d) { showAlert('Failed to load profile.', 'error'); return; }
 
-                document.getElementById('username').textContent = user.username;
-                document.getElementById('email').textContent = user.email;
+  // Hero section
+  document.getElementById('heroAvatar').textContent = d.username[0].toUpperCase();
+  document.getElementById('heroName').textContent   = d.username;
+  document.getElementById('heroMeta').textContent   =
+    `${d.email} · Joined ${d.created_at ? new Date(d.created_at).toLocaleDateString() : 'unknown'}`;
 
-                const roleBadge = document.getElementById('roleBadge');
-                roleBadge.textContent = user.role;
-                roleBadge.className = `badge badge-${user.role}`;
+  const hbr = document.getElementById('heroBadgeRole');
+  hbr.textContent = d.role; hbr.className = `badge badge-${d.role}`;
 
-                const exportBadge = document.getElementById('exportBadge');
-                exportBadge.textContent = user.can_export ? 'Enabled' : 'Disabled';
-                exportBadge.className = `badge ${user.can_export ? 'badge-success' : 'badge-danger'}`;
+  const hbe = document.getElementById('heroBadgeExport');
+  hbe.textContent = d.can_export ? '📄 Export Enabled' : 'Export Disabled';
+  hbe.className   = `badge ${d.can_export ? 'badge-success' : 'badge-viewer'}`;
 
-                // Load additional info
-                loadPermissions(user.id);
-                loadGroups(user.id);
-                loadActivityStats(user.id);
+  // Info grid
+  document.getElementById('pUsername').textContent = d.username;
+  document.getElementById('pEmail').textContent    = d.email;
+  document.getElementById('pSince').textContent    = d.created_at
+    ? new Date(d.created_at).toLocaleDateString() : '–';
+  document.getElementById('pLast').textContent     = d.last_login
+    ? new Date(d.last_login).toLocaleString() : 'Never';
 
-            } catch (error) {
-                console.error('Error loading profile:', error);
-            }
-        }
+  const rb = document.getElementById('pRole');
+  rb.textContent = d.role; rb.className = `badge badge-${d.role}`;
 
-        // Load user permissions
-        async function loadPermissions(userId) {
-            try {
-                const response = await fetch(`${API_URL}/api/admin/users/${userId}/permissions`);
-                const data = await response.json();
+  const eb = document.getElementById('pExport');
+  eb.textContent = d.can_export ? 'Enabled' : 'Disabled';
+  eb.className   = `badge ${d.can_export ? 'badge-success' : 'badge-danger'}`;
 
-                const container = document.getElementById('permissionsContainer');
+  // Activity stats (placeholder — populate from backend endpoint when available)
+  loadActivityStats(d.id);
 
-                if (data.permissions.length === 0) {
-                    container.innerHTML = '<p style="color: #6b7280;">No individual permissions assigned. Access may be through groups.</p>';
-                    return;
-                }
+  // Permissions & groups (parallel)
+  await Promise.all([loadPermissions(d.id), loadGroups(d.id)]);
+}
 
-                const list = document.createElement('ul');
-                list.className = 'permissions-list';
+/* ── Activity stats ─────────────────────────────────────────── */
+async function loadActivityStats(userId) {
+  // Try dedicated endpoint; fall back to dashes gracefully
+  const d = await api(`/api/users/${userId}/activity`);
+  document.getElementById('statSearches').textContent = d?.searches ?? '–';
+  document.getElementById('statViews').textContent    = d?.views    ?? '–';
+  document.getElementById('statExports').textContent  = d?.exports  ?? '–';
+  // statGroups filled by loadGroups()
+}
 
-                data.permissions.forEach(perm => {
-                    const item = document.createElement('li');
-                    item.className = 'permission-item';
-                    item.innerHTML = `
-                        <div>
-                            <strong>${perm.resource_type}</strong>:
-                            <span class="permission-resource">${perm.resource_name}</span>
-                        </div>
-                        <span class="badge badge-${perm.permission_level === 'admin' ? 'admin' : 'viewer'}">${perm.permission_level}</span>
-                    `;
-                    list.appendChild(item);
-                });
+/* ── Permissions ────────────────────────────────────────────── */
+async function loadPermissions(userId) {
+  const d  = await api(`/api/admin/users/${userId}/permissions`);
+  const pb = document.getElementById('permsBody');
 
-                container.innerHTML = '';
-                container.appendChild(list);
+  if (!d || !d.permissions.length) {
+    pb.innerHTML = `
+      <p style="color:var(--text-muted);">
+        No individual permissions assigned.<br>
+        <span style="font-size:.85rem;">Access may come through group membership.</span>
+      </p>`;
+    return;
+  }
 
-            } catch (error) {
-                document.getElementById('permissionsContainer').innerHTML =
-                    '<p style="color: #ef4444;">Failed to load permissions</p>';
-            }
-        }
+  pb.innerHTML = d.permissions.map(p => `
+    <div class="perm-item">
+      <div>
+        <span class="badge badge-${p.resource_type}">${p.resource_type}</span>
+        <code style="margin-left:.5rem;">${p.resource_name}</code>
+      </div>
+      <span class="badge badge-primary">${p.permission_level}</span>
+    </div>`).join('');
+}
 
-        // Load user groups
-        async function loadGroups(userId) {
-            try {
-                // Note: This endpoint would need to be created
-                const container = document.getElementById('groupsContainer');
-                container.innerHTML = '<p style="color: #6b7280;">Group membership feature coming soon</p>';
+/* ── Groups ─────────────────────────────────────────────────── */
+async function loadGroups(userId) {
+  // Try /api/users/{id}/groups; fall back to listing all and filtering
+  const d  = await api(`/api/users/${userId}/groups`);
+  const gb = document.getElementById('groupsBody');
 
-            } catch (error) {
-                document.getElementById('groupsContainer').innerHTML =
-                    '<p style="color: #ef4444;">Failed to load groups</p>';
-            }
-        }
+  if (!d || !d.groups || !d.groups.length) {
+    gb.innerHTML = `
+      <p style="color:var(--text-muted);">
+        You are not a member of any groups yet.
+      </p>`;
+    document.getElementById('statGroups').textContent = '0';
+    return;
+  }
 
-        // Load activity stats
-        async function loadActivityStats(userId) {
-            // Placeholder - would need backend endpoint
-            document.getElementById('statSearches').textContent = '-';
-            document.getElementById('statViews').textContent = '-';
-            document.getElementById('statExports').textContent = '-';
-        }
+  document.getElementById('statGroups').textContent = d.groups.length;
 
-        // Change password
-        document.getElementById('changePasswordForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
+  gb.innerHTML = d.groups.map(g => `
+    <div style="display:flex; align-items:center; justify-content:space-between;
+                padding:.75rem 0; border-bottom:1px solid var(--border);">
+      <div>
+        <div style="font-weight:600;">${g.name}</div>
+        ${g.description
+          ? `<div style="font-size:.8rem;color:var(--text-muted);margin-top:.125rem;">${g.description}</div>`
+          : ''}
+      </div>
+      <a href="/groups" class="btn btn-secondary btn-sm">View →</a>
+    </div>`).join('');
+  // Remove border from last item
+  gb.querySelector('div:last-child').style.borderBottom = 'none';
+}
 
-            const currentPassword = document.getElementById('currentPassword').value;
-            const newPassword = document.getElementById('newPassword').value;
-            const confirmPassword = document.getElementById('confirmPassword').value;
+/* ── Password strength meter ────────────────────────────────── */
+function checkPwStrength(p) {
+  const n = [p.length >= 8, /[A-Z]/.test(p), /[a-z]/.test(p), /[0-9]/.test(p)]
+    .filter(Boolean).length;
+  document.getElementById('pwBar').className =
+    'pw-bar ' + (n <= 2 ? 'weak' : n === 3 ? 'medium' : 'strong');
+}
 
-            if (newPassword !== confirmPassword) {
-                showAlert('New passwords do not match', 'error');
-                return;
-            }
+/* ── Change password form ───────────────────────────────────── */
+document.getElementById('changePwForm').addEventListener('submit', async e => {
+  e.preventDefault();
 
-            if (newPassword.length < 8) {
-                showAlert('Password must be at least 8 characters', 'error');
-                return;
-            }
+  const cur = document.getElementById('pwCur').value;
+  const nw  = document.getElementById('pwNew').value;
+  const cf  = document.getElementById('pwCf').value;
 
-            try {
-                const response = await fetch(`${API_URL}/api/auth/change-password`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        current_password: currentPassword,
-                        new_password: newPassword
-                    })
-                });
+  if (!cur || !nw || !cf) {
+    showAlert('All password fields are required.', 'error', 'pwAlert'); return;
+  }
+  if (nw.length < 8) {
+    showAlert('New password must be at least 8 characters.', 'error', 'pwAlert'); return;
+  }
+  if (nw !== cf) {
+    showAlert('New passwords do not match.', 'error', 'pwAlert'); return;
+  }
 
-                const data = await response.json();
+  const d = await api('/api/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ current_password: cur, new_password: nw })
+  });
 
-                if (response.ok) {
-                    showAlert('Password changed successfully', 'success');
-                    document.getElementById('changePasswordForm').reset();
-                } else {
-                    showAlert(data.error || 'Failed to change password', 'error');
-                }
-
-            } catch (error) {
-                showAlert('Connection error', 'error');
-            }
-        });
-
-        // Initialize
-        loadProfile();
-    </script>
+  if (d && d.success) {
+    showAlert('Password changed successfully.', 'success', 'pwAlert');
+    document.getElementById('changePwForm').reset();
+    document.getElementById('pwBar').className = 'pw-bar';
+  } else {
+    showAlert(d?.error || 'Failed to change password.', 'error', 'pwAlert');
+  }
+});
+</script>
 </body>
 </html>

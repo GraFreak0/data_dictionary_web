@@ -1,0 +1,83 @@
+<!-- ================================================================
+     SIDEBAR COMPONENT
+     Usage in Flask/Jinja2:   {% include 'components/sidebar.html' %}
+     Usage note: pages pass `active_page` variable to highlight links.
+     e.g.  render_template('index.html', active_page='search')
+     ================================================================ -->
+<aside class="sidebar" id="sidebar">
+
+  <!-- Brand -->
+  <div class="sidebar-brand">
+    <a href="/" class="brand-title">
+      <span>📚</span> Data Dictionary
+    </a>
+
+    <!-- User card — JS fills in name/role/avatar -->
+    <a href="#" onclick="showPanel && showPanel('profile'); return false;" class="sidebar-user" id="sidebarUser">
+      <div class="user-avatar" id="userAvatar">?</div>
+      <div class="user-info-wrap">
+        <div class="user-name" id="userName">Loading…</div>
+        <div class="user-role" id="userRole">—</div>
+      </div>
+    </a>
+  </div>
+
+  <!-- Nav links — pages that use a panel SPA use data-panel + onclick;
+       pages that navigate away use plain <a href>. Both styles coexist. -->
+  <ul class="sidebar-nav" id="sidebarNav">
+
+    <!-- Catalog section (visible to all) -->
+    <li class="nav-item">
+      <a href="/#search" class="nav-link {% if active_page == 'search' %}active{% endif %}"
+         data-panel="search">
+        <span class="nav-icon">🔍</span> Search
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="/#browse" class="nav-link {% if active_page == 'browse' %}active{% endif %}"
+         data-panel="browse">
+        <span class="nav-icon">📂</span> Browse
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="/#stats" class="nav-link {% if active_page == 'stats' %}active{% endif %}"
+         data-panel="stats">
+        <span class="nav-icon">📊</span> Statistics
+      </a>
+    </li>
+    <li class="nav-item">
+      <a href="/#profile" class="nav-link {% if active_page == 'profile' %}active{% endif %}"
+         data-panel="profile">
+        <span class="nav-icon">👤</span> My Profile
+      </a>
+    </li>
+
+    <!-- Admin section — hidden via CSS until JS adds .admin-visible to <body> -->
+    <li class="admin-only" style="display:none">
+      <div class="nav-divider"></div>
+    </li>
+    <li class="admin-only" style="display:none">
+      <span class="nav-section-label">Admin</span>
+    </li>
+    <li class="admin-only" style="display:none">
+      <a href="/admin" class="nav-link {% if active_page == 'admin' %}active{% endif %}">
+        <span class="nav-icon">⚙️</span> Admin Panel
+      </a>
+    </li>
+    <li class="admin-only" style="display:none">
+      <a href="/groups" class="nav-link {% if active_page == 'groups' %}active{% endif %}">
+        <span class="nav-icon">👥</span> Groups
+      </a>
+    </li>
+
+  </ul><!-- /sidebar-nav -->
+
+  <!-- Theme toggle pinned to bottom -->
+  <div class="sidebar-footer">
+    <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" aria-label="Toggle dark mode">
+      <span id="themeLabel">🌙 Dark Mode</span>
+      <div class="toggle-track" id="toggleTrack" aria-hidden="true"></div>
+    </button>
+  </div>
+
+</aside><!-- /sidebar -->

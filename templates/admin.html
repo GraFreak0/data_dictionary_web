@@ -1,652 +1,904 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Panel - Data Dictionary</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f3f4f6;
-            padding: 2rem;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-        }
-
-        h1 {
-            font-size: 2rem;
-            color: #111827;
-        }
-
-        .btn {
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 6px;
-            font-size: 1rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-            text-decoration: none;
-            display: inline-block;
-        }
-
-        .btn-primary {
-            background: #2563eb;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #1e40af;
-        }
-
-        .btn-danger {
-            background: #ef4444;
-            color: white;
-        }
-
-        .btn-secondary {
-            background: #6b7280;
-            color: white;
-        }
-
-        .btn-secondary:hover {
-            background: #4b5563;
-        }
-
-        .header-actions {
-            display: flex;
-            gap: 1rem;
-        }
-
-        .card {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            margin-bottom: 2rem;
-        }
-
-        .card-header {
-            padding: 1.5rem;
-            border-bottom: 1px solid #e5e7eb;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .card-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-        }
-
-        .card-body {
-            padding: 1.5rem;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        th {
-            text-align: left;
-            padding: 0.75rem;
-            background: #f3f4f6;
-            font-weight: 600;
-            border-bottom: 2px solid #e5e7eb;
-        }
-
-        td {
-            padding: 0.75rem;
-            border-bottom: 1px solid #e5e7eb;
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-
-        .badge-admin {
-            background: #dbeafe;
-            color: #1e40af;
-        }
-
-        .badge-contributor {
-            background: #d1fae5;
-            color: #065f46;
-        }
-
-        .badge-viewer {
-            background: #e5e7eb;
-            color: #374151;
-        }
-
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-        }
-
-        .modal.active {
-            display: flex;
-        }
-
-        .modal-content {
-            background: white;
-            border-radius: 12px;
-            max-width: 500px;
-            width: 90%;
-            max-height: 90vh;
-            overflow-y: auto;
-        }
-
-        .modal-header {
-            padding: 1.5rem;
-            border-bottom: 1px solid #e5e7eb;
-        }
-
-        .modal-title {
-            font-size: 1.5rem;
-            font-weight: 600;
-        }
-
-        .modal-body {
-            padding: 1.5rem;
-        }
-
-        .modal-footer {
-            padding: 1.5rem;
-            border-top: 1px solid #e5e7eb;
-            display: flex;
-            gap: 1rem;
-            justify-content: flex-end;
-        }
-
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-
-        .form-label {
-            display: block;
-            font-size: 0.875rem;
-            font-weight: 500;
-            margin-bottom: 0.5rem;
-        }
-
-        .form-input,
-        .form-select {
-            width: 100%;
-            padding: 0.75rem;
-            border: 1px solid #d1d5db;
-            border-radius: 6px;
-            font-size: 1rem;
-        }
-
-        .form-input:focus,
-        .form-select:focus {
-            outline: none;
-            border-color: #2563eb;
-            box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
-        }
-
-        .alert {
-            padding: 1rem;
-            border-radius: 6px;
-            margin-bottom: 1rem;
-        }
-
-        .alert-success {
-            background: #d1fae5;
-            color: #065f46;
-            border: 1px solid #6ee7b7;
-        }
-
-        .alert-error {
-            background: #fee2e2;
-            color: #991b1b;
-            border: 1px solid #fecaca;
-        }
-
-        .btn-sm {
-            padding: 0.5rem 1rem;
-            font-size: 0.875rem;
-        }
-
-        .actions {
-            display: flex;
-            gap: 0.5rem;
-        }
-
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .checkbox-group input[type="checkbox"] {
-            width: 1.25rem;
-            height: 1.25rem;
-            cursor: pointer;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Panel – Data Dictionary</title>
+  <link rel="stylesheet" href="/static/styles/main.css">
+  <script>(function(){const t=localStorage.getItem('theme')||'light';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>👥 Admin Panel</h1>
-            <div class="header-actions">
-                <a href="/" class="btn btn-secondary">Back to Catalog</a>
-                <button class="btn btn-danger" onclick="logout()">Logout</button>
-            </div>
-        </div>
+<div class="app-layout">
 
-        <div id="alertContainer"></div>
+  <!-- ═══════════════════════════════════════════════════════
+       SIDEBAR  (shared component)
+       Admin pages highlight "admin" in the sidebar.
+       ═══════════════════════════════════════════════════════ -->
+  {% include 'components/sidebar.html' %}
 
-        <!-- Users Section -->
+  <!-- ═══════════════════════════════════════════════════════
+       MAIN AREA
+       ═══════════════════════════════════════════════════════ -->
+  <div class="main-area">
+
+    <!-- Top bar -->
+    <header class="topbar">
+      <span class="topbar-title" id="topbarTitle">Users</span>
+      <div class="topbar-actions">
+        <button class="btn btn-secondary btn-sm" onclick="location.href='/'">← Catalog</button>
+        <button class="btn btn-danger btn-sm" onclick="logout()">Logout</button>
+      </div>
+    </header>
+
+    <!-- Page body -->
+    <div class="page-body">
+      <div id="globalAlert" class="alert"></div>
+
+      <!-- ╔═══════════════════════════════════════════════╗
+           ║  PANEL: USERS                                ║
+           ╚═══════════════════════════════════════════════╝ -->
+      <div class="panel active" id="panel-users">
         <div class="card">
-            <div class="card-header">
-                <h2 class="card-title">Users</h2>
-                <button class="btn btn-primary" onclick="showCreateUserModal()">+ Add User</button>
+          <div class="card-header">
+            <span class="card-title">All Users</span>
+            <div style="display:flex; gap:.625rem;">
+              <button class="btn btn-purple btn-sm" onclick="openModal('createGroupModal')">
+                + Create Group
+              </button>
+              <button class="btn btn-primary btn-sm" onclick="openModal('createUserModal')">
+                + Add User
+              </button>
             </div>
-            <div class="card-body">
-                <table id="usersTable">
-                    <thead>
-                        <tr>
-                            <th>Username</th>
-                            <th>Email</th>
-                            <th>Role</th>
-                            <th>Can Export</th>
-                            <th>Last Login</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="usersTableBody">
-                        <tr>
-                            <td colspan="6" style="text-align: center; padding: 2rem;">Loading...</td>
-                        </tr>
-                    </tbody>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Username</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Export</th>
+                  <th>Last Login</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="usersTbody">
+                <tr>
+                  <td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted)">
+                    Loading…
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ╔═══════════════════════════════════════════════╗
+           ║  PANEL: PERMISSIONS                          ║
+           ╚═══════════════════════════════════════════════╝ -->
+      <div class="panel" id="panel-perms">
+        <div class="card">
+          <div class="card-header"><span class="card-title">User Permissions</span></div>
+          <div class="card-body">
+            <div class="form-group" style="max-width:360px">
+              <label class="form-label">Select User</label>
+              <select class="form-select" id="permUserSel"
+                      onchange="loadUserPerms(this.value)">
+                <option value="">Choose a user…</option>
+              </select>
+            </div>
+
+            <!-- Permissions area (shown after user chosen) -->
+            <div id="permsArea" style="display:none; margin-top:1.25rem">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+                <strong id="permUserLabel"></strong>
+                <button class="btn btn-primary btn-sm"
+                        onclick="openModal('grantPermModal')">+ Grant Permission</button>
+              </div>
+              <div style="overflow-x:auto">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Type</th><th>Resource</th><th>Level</th><th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="permsTbody"></tbody>
                 </table>
+              </div>
             </div>
+          </div>
         </div>
+      </div>
 
-        <!-- Permissions Section -->
+      <!-- ╔═══════════════════════════════════════════════╗
+           ║  PANEL: GROUPS                               ║
+           ╚═══════════════════════════════════════════════╝ -->
+      <div class="panel" id="panel-groups">
         <div class="card">
-            <div class="card-header">
-                <h2 class="card-title">Permissions</h2>
+          <div class="card-header">
+            <span class="card-title">User Groups</span>
+            <button class="btn btn-purple btn-sm" onclick="openModal('createGroupModal')">
+              + Create Group
+            </button>
+          </div>
+          <div class="card-body">
+            <div class="groups-grid" id="groupsGrid">
+              <div class="spinner-wrap"><div class="spinner"></div></div>
             </div>
-            <div class="card-body">
-                <p style="color: #6b7280; margin-bottom: 1rem;">
-                    Select a user to manage their permissions
-                </p>
-                <select class="form-select" id="userSelect" onchange="loadUserPermissions(this.value)">
-                    <option value="">Select a user...</option>
-                </select>
-
-                <div id="permissionsContainer" style="margin-top: 1.5rem; display: none;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                        <h3>Permissions for: <span id="selectedUserName"></span></h3>
-                        <button class="btn btn-primary btn-sm" onclick="showGrantPermissionModal()">+ Grant Permission</button>
-                    </div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Resource Type</th>
-                                <th>Resource Name</th>
-                                <th>Permission Level</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="permissionsTableBody">
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+          </div>
         </div>
-    </div>
+      </div>
 
-    <!-- Create User Modal -->
-    <div class="modal" id="createUserModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 class="modal-title">Create New User</h3>
-            </div>
-            <div class="modal-body">
-                <form id="createUserForm">
-                    <div class="form-group">
-                        <label class="form-label">Username</label>
-                        <input type="text" class="form-input" id="newUsername" required>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Email</label>
-                        <input type="email" class="form-input" id="newEmail" required>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Password</label>
-                        <input type="password" class="form-input" id="newPassword" required>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Role</label>
-                        <select class="form-select" id="newRole" required>
-                            <option value="viewer">Viewer (Read-only)</option>
-                            <option value="contributor">Contributor (Can edit)</option>
-                            <option value="admin">Admin (Full access)</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="canExport">
-                            <label class="form-label" style="margin: 0;">Allow PDF Export</label>
-                        </div>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('createUserModal')">Cancel</button>
-                <button class="btn btn-primary" onclick="createUser()">Create User</button>
-            </div>
+      <!-- ╔═══════════════════════════════════════════════╗
+           ║  PANEL: ACTIVITY LOGS                        ║
+           ╚═══════════════════════════════════════════════╝ -->
+      <div class="panel" id="panel-logs">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Activity Logs</span>
+            <button class="btn btn-secondary btn-sm" onclick="loadLogs()">↺ Refresh</button>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>User</th><th>Action</th><th>Resource</th><th>IP</th><th>Time</th>
+                </tr>
+              </thead>
+              <tbody id="logsTbody">
+                <tr>
+                  <td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted)">
+                    No logs available
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-    </div>
+      </div>
 
-    <!-- Grant Permission Modal -->
-    <div class="modal" id="grantPermissionModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 class="modal-title">Grant Permission</h3>
-            </div>
-            <div class="modal-body">
-                <form id="grantPermissionForm">
-                    <div class="form-group">
-                        <label class="form-label">Resource Type</label>
-                        <select class="form-select" id="resourceType" required>
-                            <option value="database">Database/Schema</option>
-                            <option value="table">Table</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Resource Name</label>
-                        <input type="text" class="form-input" id="resourceName" placeholder="e.g., production or public.customers" required>
-                        <small style="color: #6b7280; font-size: 0.875rem;">
-                            For tables, use format: schema.table
-                        </small>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Permission Level</label>
-                        <select class="form-select" id="permissionLevel" required>
-                            <option value="read">Read</option>
-                            <option value="write">Write</option>
-                            <option value="admin">Admin</option>
-                        </select>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('grantPermissionModal')">Cancel</button>
-                <button class="btn btn-primary" onclick="grantPermission()">Grant Permission</button>
-            </div>
+    </div><!-- /page-body -->
+  </div><!-- /main-area -->
+
+</div><!-- /app-layout -->
+
+<!-- ═══════════════════════════════════════════════════════════
+     FOOTER  (shared component)
+     ═══════════════════════════════════════════════════════════ -->
+{% include 'components/footer.html' %}
+
+<!-- ═══════════════════════════════════════════════════════════
+     MODALS
+     ═══════════════════════════════════════════════════════════ -->
+
+<!-- ── ADD USER ────────────────────────────────────────────── -->
+<div class="modal-backdrop" id="createUserModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Add New User</span>
+      <button class="modal-close" onclick="closeModal('createUserModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Username <span style="color:var(--danger)">*</span></label>
+        <input class="form-input" id="nuName" placeholder="e.g. jsmith">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email <span style="color:var(--danger)">*</span></label>
+        <input class="form-input" type="email" id="nuEmail" placeholder="jsmith@company.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password <span style="color:var(--danger)">*</span></label>
+        <input class="form-input" type="password" id="nuPw" placeholder="Min 8 characters">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Role</label>
+        <select class="form-select" id="nuRole">
+          <option value="viewer">Viewer — read-only access</option>
+          <option value="contributor">Contributor — can edit descriptions</option>
+          <option value="admin">Admin — full access</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <div class="checkbox-row">
+          <input type="checkbox" id="nuExport">
+          <label class="form-label" style="margin:0">Allow PDF Export</label>
         </div>
+      </div>
     </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('createUserModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="createUser()">Create User</button>
+    </div>
+  </div>
+</div>
 
-    <script>
-        let currentUserId = null;
-        const API_URL = '';
+<!-- ── GRANT PERMISSION ────────────────────────────────────── -->
+<div class="modal-backdrop" id="grantPermModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Grant Permission</span>
+      <button class="modal-close" onclick="closeModal('grantPermModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Resource Type</label>
+        <select class="form-select" id="gpType">
+          <option value="database">Database / Schema</option>
+          <option value="table">Table</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Resource Name</label>
+        <input class="form-input" id="gpName"
+               placeholder="e.g. production  or  public.customers">
+        <div class="form-helper">For tables use: schema.table_name</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Permission Level</label>
+        <select class="form-select" id="gpLevel">
+          <option value="read">Read</option>
+          <option value="write">Write</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('grantPermModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="grantPerm()">Grant</button>
+    </div>
+  </div>
+</div>
 
-        // Check admin access on page load
-        window.addEventListener('DOMContentLoaded', async () => {
-            const user = JSON.parse(sessionStorage.getItem('user') || '{}');
-            
-            if (!user.username || user.role !== 'admin') {
-                alert('Admin access required');
-                window.location.href = '/signin';
-                return;
-            }
+<!-- ── CREATE GROUP WIZARD ─────────────────────────────────── -->
+<div class="modal-backdrop" id="createGroupModal">
+  <div class="modal-box modal-lg">
+    <div class="modal-header">
+      <span class="modal-title">Create Group</span>
+      <button class="modal-close" onclick="closeModal('createGroupModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="cgAlert" class="alert"></div>
 
-            loadUsers();
-        });
+      <!-- Wizard tabs -->
+      <div class="tabs" id="cgTabBar">
+        <button class="tab-btn active" onclick="switchTab(this,'cgTab1','#cgTabBar + div')">
+          1 · Details
+        </button>
+        <button class="tab-btn" onclick="switchTab(this,'cgTab2','#cgTabBar + div')">
+          2 · Members
+        </button>
+        <button class="tab-btn" onclick="switchTab(this,'cgTab3','#cgTabBar + div')">
+          3 · Permissions
+        </button>
+      </div>
+      <div><!-- tab panel container -->
 
-        // API call helper
-        async function apiCall(endpoint, options = {}) {
-            const response = await fetch(API_URL + endpoint, options);
-            if (response.status === 401) {
-                window.location.href = '/signin';
-                return null;
-            }
-            return response.json();
-        }
+        <!-- Tab 1: Details -->
+        <div class="tab-panel active" id="cgTab1">
+          <div class="form-group">
+            <label class="form-label">Group Name <span style="color:var(--danger)">*</span></label>
+            <input class="form-input" id="cgName" placeholder="e.g. Data Engineers">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Description</label>
+            <textarea class="form-textarea" id="cgDesc"
+                      placeholder="What does this group do?"></textarea>
+          </div>
+        </div>
 
-        // Logout
-        async function logout() {
-            await apiCall('/api/auth/logout', { method: 'POST' });
-            sessionStorage.clear();
-            window.location.href = '/signin';
-        }
+        <!-- Tab 2: Members -->
+        <div class="tab-panel" id="cgTab2">
+          <p style="color:var(--text-secondary);font-size:.875rem;margin-bottom:1rem">
+            Check users to add to this group when it's created.
+          </p>
+          <div id="cgMemberChecks"
+               style="display:flex;flex-direction:column;gap:.5rem;
+                      max-height:280px;overflow-y:auto;padding:.25rem">
+            <!-- Checkboxes populated by JS -->
+          </div>
+        </div>
 
-        // Show alert
-        function showAlert(message, type = 'success') {
-            const container = document.getElementById('alertContainer');
-            const alert = document.createElement('div');
-            alert.className = `alert alert-${type}`;
-            alert.textContent = message;
-            container.appendChild(alert);
+        <!-- Tab 3: Permissions -->
+        <div class="tab-panel" id="cgTab3">
+          <p style="color:var(--text-secondary);font-size:.875rem;margin-bottom:1rem">
+            Add resource permissions that all group members will inherit.
+          </p>
+          <div style="display:flex;gap:.625rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center">
+            <select class="form-select" id="cgPType" style="flex:0 0 140px">
+              <option value="database">Database</option>
+              <option value="table">Table</option>
+            </select>
+            <input class="form-input" id="cgPName"
+                   placeholder="Resource name" style="flex:1;min-width:140px">
+            <select class="form-select" id="cgPLevel" style="flex:0 0 120px">
+              <option value="read">Read</option>
+              <option value="write">Write</option>
+              <option value="admin">Admin</option>
+            </select>
+            <button class="btn btn-primary btn-sm" onclick="cgAddPerm()">Add</button>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead>
+                <tr><th>Type</th><th>Resource</th><th>Level</th><th></th></tr>
+              </thead>
+              <tbody id="cgPermRows">
+                <tr>
+                  <td colspan="4" style="color:var(--text-muted);padding:1rem">
+                    No permissions added yet
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
 
-            setTimeout(() => {
-                alert.remove();
-            }, 5000);
-        }
+      </div><!-- /tab panel container -->
+    </div><!-- /modal-body -->
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('createGroupModal')">Cancel</button>
+      <button class="btn btn-purple" onclick="saveGroup()">💾 Save Group</button>
+    </div>
+  </div>
+</div>
 
-        // Load users
-        async function loadUsers() {
-            const data = await apiCall('/api/admin/users');
-            if (!data) return;
+<!-- ── GROUP DETAIL ────────────────────────────────────────── -->
+<div class="modal-backdrop" id="groupDetailModal">
+  <div class="modal-box modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="gdTitle">Group</span>
+      <button class="modal-close" onclick="closeModal('groupDetailModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="tabs" id="gdTabBar">
+        <button class="tab-btn active" onclick="switchTab(this,'gdTabMembers','#gdTabBar + div')">
+          Members
+        </button>
+        <button class="tab-btn" onclick="switchTab(this,'gdTabPerms','#gdTabBar + div')">
+          Permissions
+        </button>
+      </div>
+      <div>
 
-            const tbody = document.getElementById('usersTableBody');
-            const userSelect = document.getElementById('userSelect');
+        <!-- Members tab -->
+        <div class="tab-panel active" id="gdTabMembers">
+          <div style="display:flex;justify-content:flex-end;margin-bottom:.875rem">
+            <button class="btn btn-primary btn-sm"
+                    onclick="openModal('addMemberModal')">+ Add Member</button>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead>
+                <tr><th>Username</th><th>Email</th><th>Role</th><th>Action</th></tr>
+              </thead>
+              <tbody id="gdMemberRows">
+                <tr><td colspan="4" style="color:var(--text-muted);padding:1rem">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
 
-            tbody.innerHTML = '';
-            userSelect.innerHTML = '<option value="">Select a user...</option>';
+        <!-- Permissions tab -->
+        <div class="tab-panel" id="gdTabPerms">
+          <div style="display:flex;gap:.625rem;margin-bottom:.875rem;flex-wrap:wrap;align-items:center">
+            <select class="form-select" id="gdPType" style="flex:0 0 140px">
+              <option value="database">Database</option>
+              <option value="table">Table</option>
+            </select>
+            <input class="form-input" id="gdPName"
+                   placeholder="Resource name" style="flex:1;min-width:140px">
+            <select class="form-select" id="gdPLevel" style="flex:0 0 110px">
+              <option value="read">Read</option>
+              <option value="write">Write</option>
+              <option value="admin">Admin</option>
+            </select>
+            <button class="btn btn-primary btn-sm" onclick="gdAddPerm()">Add</button>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table">
+              <thead>
+                <tr><th>Type</th><th>Resource</th><th>Level</th><th>Action</th></tr>
+              </thead>
+              <tbody id="gdPermRows">
+                <tr><td colspan="4" style="color:var(--text-muted);padding:1rem">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
 
-            data.users.forEach(user => {
-                // Table row
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td><strong>${user.username}</strong></td>
-                    <td>${user.email}</td>
-                    <td><span class="badge badge-${user.role}">${user.role}</span></td>
-                    <td>
-                        <input type="checkbox" 
-                               ${user.can_export ? 'checked' : ''} 
-                               onchange="toggleExport(${user.id}, this.checked)"
-                               style="width: 1.25rem; height: 1.25rem; cursor: pointer;">
-                    </td>
-                    <td>${user.last_login ? new Date(user.last_login).toLocaleString() : 'Never'}</td>
-                    <td class="actions">
-                        <button class="btn btn-primary btn-sm" onclick="selectUserForPermissions(${user.id}, '${user.username}')">
-                            Permissions
-                        </button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('groupDetailModal')">Close</button>
+    </div>
+  </div>
+</div>
 
-                // Select option
-                const option = document.createElement('option');
-                option.value = user.id;
-                option.textContent = `${user.username} (${user.role})`;
-                userSelect.appendChild(option);
-            });
-        }
+<!-- ── ADD MEMBER ──────────────────────────────────────────── -->
+<div class="modal-backdrop" id="addMemberModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Add Member</span>
+      <button class="modal-close" onclick="closeModal('addMemberModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Select User</label>
+        <select class="form-select" id="amUserSel">
+          <option value="">Choose user…</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('addMemberModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="addMember()">Add Member</button>
+    </div>
+  </div>
+</div>
 
-        // Toggle export permission
-        async function toggleExport(userId, canExport) {
-            const data = await apiCall(`/api/admin/users/${userId}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ can_export: canExport })
-            });
+<!-- ═══════════════════════════════════════════════════════════
+     SCRIPTS
+     ═══════════════════════════════════════════════════════════ -->
+<script src="/static/scripts/app.js"></script>
+<script>
+/* ── State ──────────────────────────────────────────────────── */
+let _allUsers      = [];
+let _curPermUserId = null;
+let _curGroupId    = null;
+let _cgPerms       = [];   // pending perms for create-group wizard
 
-            if (data && data.success) {
-                showAlert(`Export permission ${canExport ? 'granted' : 'revoked'}`);
-            } else {
-                showAlert('Failed to update export permission', 'error');
-                loadUsers(); // Reload to reset checkbox
-            }
-        }
+/* ── Panel routing ──────────────────────────────────────────── */
+const PANEL_LABELS = {
+  users:  'Users',
+  perms:  'Permissions',
+  groups: 'Groups',
+  logs:   'Activity Logs'
+};
 
-        // Select user for permissions
-        function selectUserForPermissions(userId, username) {
-            document.getElementById('userSelect').value = userId;
-            loadUserPermissions(userId);
-        }
+function showPanel(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('[data-panel]').forEach(l => l.classList.remove('active'));
+  const panel = document.getElementById('panel-' + name);
+  if (panel) panel.classList.add('active');
+  const link = document.querySelector(`[data-panel="${name}"]`);
+  if (link) link.classList.add('active');
+  document.getElementById('topbarTitle').textContent = PANEL_LABELS[name] || name;
+  history.replaceState(null, '', '#' + name);
+}
 
-        // Load user permissions
-        async function loadUserPermissions(userId) {
-            if (!userId) {
-                document.getElementById('permissionsContainer').style.display = 'none';
-                return;
-            }
+/* ── Init ───────────────────────────────────────────────────── */
+window.addEventListener('DOMContentLoaded', async () => {
+  const user = getUser();
+  if (!user || user.role !== 'admin') {
+    alert('Admin access required.');
+    location.href = '/signin';
+    return;
+  }
+  initSidebar(user);
 
-            currentUserId = userId;
-            const userSelect = document.getElementById('userSelect');
-            const selectedOption = userSelect.options[userSelect.selectedIndex];
-            document.getElementById('selectedUserName').textContent = selectedOption.textContent;
+  // Wire admin sidebar nav items to panels
+  document.querySelectorAll('[data-panel]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.preventDefault();
+      showPanel(el.getAttribute('data-panel'));
+    });
+  });
 
-            const data = await apiCall(`/api/admin/users/${userId}/permissions`);
-            if (!data) return;
+  const hash = location.hash.replace('#','') || 'users';
+  showPanel(hash);
 
-            const tbody = document.getElementById('permissionsTableBody');
-            tbody.innerHTML = '';
+  await loadUsers();
+  await loadGroups();
+});
 
-            if (data.permissions.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 2rem; color: #6b7280;">No permissions granted yet</td></tr>';
-            } else {
-                data.permissions.forEach(perm => {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td><span class="badge badge-${perm.resource_type === 'database' ? 'admin' : 'contributor'}">${perm.resource_type}</span></td>
-                        <td><code>${perm.resource_name}</code></td>
-                        <td>${perm.permission_level}</td>
-                        <td class="actions">
-                            <button class="btn btn-danger btn-sm" onclick="revokePermission(${perm.id})">Revoke</button>
-                        </td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-            }
+/* ─────────────────────────────────────────────────────────────
+   USERS PANEL
+   ───────────────────────────────────────────────────────────── */
+async function loadUsers() {
+  const d = await api('/api/admin/users');
+  if (!d) return;
+  _allUsers = d.users;
 
-            document.getElementById('permissionsContainer').style.display = 'block';
-        }
+  const tb  = document.getElementById('usersTbody');
+  const ps  = document.getElementById('permUserSel');
+  const am  = document.getElementById('amUserSel');
+  const mc  = document.getElementById('cgMemberChecks');
 
-        // Modal functions
-        function showCreateUserModal() {
-            document.getElementById('createUserModal').classList.add('active');
-        }
+  tb.innerHTML  = '';
+  ps.innerHTML  = '<option value="">Choose a user…</option>';
+  if (am) am.innerHTML = '<option value="">Choose user…</option>';
+  if (mc) mc.innerHTML = '';
 
-        function showGrantPermissionModal() {
-            if (!currentUserId) {
-                showAlert('Please select a user first', 'error');
-                return;
-            }
-            document.getElementById('grantPermissionModal').classList.add('active');
-        }
+  d.users.forEach(u => {
+    // Table row
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><strong>${u.username}</strong></td>
+      <td style="color:var(--text-secondary)">${u.email}</td>
+      <td><span class="badge badge-${u.role}">${u.role}</span></td>
+      <td>
+        <input type="checkbox" ${u.can_export ? 'checked' : ''}
+               style="accent-color:var(--primary); width:16px; height:16px; cursor:pointer"
+               onchange="toggleExport(${u.id}, this.checked)">
+      </td>
+      <td style="color:var(--text-muted);font-size:.875rem">
+        ${u.last_login ? new Date(u.last_login).toLocaleString() : 'Never'}
+      </td>
+      <td>
+        <button class="btn btn-secondary btn-sm"
+                onclick="jumpToPerms(${u.id}, '${u.username}')">
+          Permissions
+        </button>
+      </td>`;
+    tb.appendChild(tr);
 
-        function closeModal(modalId) {
-            document.getElementById(modalId).classList.remove('active');
-        }
+    // Permission user select
+    ps.insertAdjacentHTML('beforeend',
+      `<option value="${u.id}">${u.username} (${u.role})</option>`);
 
-        // Create user
-        async function createUser() {
-            const username = document.getElementById('newUsername').value;
-            const email = document.getElementById('newEmail').value;
-            const password = document.getElementById('newPassword').value;
-            const role = document.getElementById('newRole').value;
-            const canExport = document.getElementById('canExport').checked;
+    // Add-member select
+    if (am) am.insertAdjacentHTML('beforeend',
+      `<option value="${u.id}">${u.username}</option>`);
 
-            const data = await apiCall('/api/admin/users', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, email, password, role, can_export: canExport })
-            });
+    // Group wizard member checkboxes
+    if (mc) mc.insertAdjacentHTML('beforeend', `
+      <div class="checkbox-row">
+        <input type="checkbox" value="${u.id}" id="cu${u.id}">
+        <label for="cu${u.id}" style="font-size:.9rem">
+          ${u.username}
+          <span style="color:var(--text-muted)">(${u.role})</span>
+        </label>
+      </div>`);
+  });
+}
 
-            if (data && data.success) {
-                showAlert('User created successfully');
-                closeModal('createUserModal');
-                document.getElementById('createUserForm').reset();
-                loadUsers();
-            } else {
-                showAlert(data.error || 'Failed to create user', 'error');
-            }
-        }
+async function createUser() {
+  const body = {
+    username:   document.getElementById('nuName').value.trim(),
+    email:      document.getElementById('nuEmail').value.trim(),
+    password:   document.getElementById('nuPw').value,
+    role:       document.getElementById('nuRole').value,
+    can_export: document.getElementById('nuExport').checked
+  };
+  if (!body.username || !body.email || !body.password) {
+    showAlert('Username, email and password are required.', 'error'); return;
+  }
+  const d = await api('/api/admin/users', {
+    method: 'POST', body: JSON.stringify(body)
+  });
+  if (d && d.success) {
+    showAlert(`User "${body.username}" created.`);
+    closeModal('createUserModal');
+    ['nuName','nuEmail','nuPw'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('nuExport').checked = false;
+    await loadUsers();
+  } else {
+    showAlert(d?.error || 'Failed to create user.', 'error');
+  }
+}
 
-        // Grant permission
-        async function grantPermission() {
-            const resourceType = document.getElementById('resourceType').value;
-            const resourceName = document.getElementById('resourceName').value;
-            const permissionLevel = document.getElementById('permissionLevel').value;
+async function toggleExport(uid, val) {
+  const d = await api(`/api/admin/users/${uid}`, {
+    method: 'PATCH', body: JSON.stringify({ can_export: val })
+  });
+  if (d && d.success) {
+    showAlert(`Export ${val ? 'granted to' : 'revoked from'} user.`);
+  } else {
+    showAlert('Failed to update export permission.', 'error');
+    await loadUsers(); // revert checkbox
+  }
+}
 
-            const data = await apiCall(`/api/admin/users/${currentUserId}/permissions`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ resource_type: resourceType, resource_name: resourceName, permission_level: permissionLevel })
-            });
+/* ─────────────────────────────────────────────────────────────
+   PERMISSIONS PANEL
+   ───────────────────────────────────────────────────────────── */
+function jumpToPerms(id, name) {
+  showPanel('perms');
+  document.getElementById('permUserSel').value = id;
+  loadUserPerms(id);
+}
 
-            if (data && data.success) {
-                showAlert('Permission granted successfully');
-                closeModal('grantPermissionModal');
-                document.getElementById('grantPermissionForm').reset();
-                loadUserPermissions(currentUserId);
-            } else {
-                showAlert(data.error || 'Failed to grant permission', 'error');
-            }
-        }
+async function loadUserPerms(uid) {
+  if (!uid) { document.getElementById('permsArea').style.display = 'none'; return; }
+  _curPermUserId = uid;
 
-        // Revoke permission
-        async function revokePermission(permissionId) {
-            if (!confirm('Are you sure you want to revoke this permission?')) return;
+  const u = _allUsers.find(u => u.id == uid);
+  document.getElementById('permUserLabel').textContent =
+    u ? `Permissions for ${u.username}` : `User #${uid}`;
 
-            const data = await apiCall(`/api/admin/permissions/${permissionId}`, {
-                method: 'DELETE'
-            });
+  const d  = await api(`/api/admin/users/${uid}/permissions`);
+  const tb = document.getElementById('permsTbody');
+  tb.innerHTML = '';
 
-            if (data && data.success) {
-                showAlert('Permission revoked successfully');
-                loadUserPermissions(currentUserId);
-            } else {
-                showAlert('Failed to revoke permission', 'error');
-            }
-        }
+  if (!d || !d.permissions.length) {
+    tb.innerHTML = `<tr>
+      <td colspan="4" style="color:var(--text-muted);padding:1.25rem">
+        No permissions granted yet.
+      </td>
+    </tr>`;
+  } else {
+    d.permissions.forEach(p => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><span class="badge badge-${p.resource_type}">${p.resource_type}</span></td>
+        <td><code>${p.resource_name}</code></td>
+        <td>${p.permission_level}</td>
+        <td>
+          <button class="btn btn-danger btn-sm"
+                  onclick="revokePerm(${p.id})">Revoke</button>
+        </td>`;
+      tb.appendChild(tr);
+    });
+  }
+  document.getElementById('permsArea').style.display = 'block';
+}
 
-        // Close modal on outside click
-        document.querySelectorAll('.modal').forEach(modal => {
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) {
-                    modal.classList.remove('active');
-                }
-            });
-        });
-    </script>
+async function grantPerm() {
+  const body = {
+    resource_type:  document.getElementById('gpType').value,
+    resource_name:  document.getElementById('gpName').value.trim(),
+    permission_level: document.getElementById('gpLevel').value
+  };
+  if (!body.resource_name) {
+    showAlert('Resource name is required.', 'error'); return;
+  }
+  const d = await api(`/api/admin/users/${_curPermUserId}/permissions`, {
+    method: 'POST', body: JSON.stringify(body)
+  });
+  if (d && d.success) {
+    showAlert('Permission granted.');
+    closeModal('grantPermModal');
+    document.getElementById('gpName').value = '';
+    await loadUserPerms(_curPermUserId);
+  } else {
+    showAlert(d?.error || 'Failed to grant permission.', 'error');
+  }
+}
+
+async function revokePerm(id) {
+  if (!confirm('Revoke this permission?')) return;
+  const d = await api(`/api/admin/permissions/${id}`, { method: 'DELETE' });
+  if (d && d.success) {
+    showAlert('Permission revoked.');
+    await loadUserPerms(_curPermUserId);
+  } else {
+    showAlert('Failed to revoke permission.', 'error');
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   GROUPS PANEL
+   ───────────────────────────────────────────────────────────── */
+async function loadGroups() {
+  const d = await api('/api/groups');
+  if (!d) return;
+
+  const grid = document.getElementById('groupsGrid');
+  grid.innerHTML = '';
+
+  if (!d.groups.length) {
+    grid.innerHTML = `<p style="color:var(--text-muted)">
+      No groups yet. Click <strong>+ Create Group</strong> to get started.
+    </p>`;
+    return;
+  }
+
+  d.groups.forEach(g => {
+    const card = document.createElement('div');
+    card.className = 'group-card';
+    card.innerHTML = `
+      <div class="group-card-name">${g.name}</div>
+      <div class="group-card-desc">${g.description || 'No description provided.'}</div>
+      <div class="group-card-stats">
+        <span>👥 ${g.member_count} member${g.member_count !== 1 ? 's' : ''}</span>
+      </div>`;
+    card.onclick = () => openGroupDetail(g.id, g.name);
+    grid.appendChild(card);
+  });
+}
+
+/* Create Group Wizard ──────────────────────────────────────── */
+function cgAddPerm() {
+  const t = document.getElementById('cgPType').value;
+  const n = document.getElementById('cgPName').value.trim();
+  const l = document.getElementById('cgPLevel').value;
+  if (!n) { showAlert('Enter a resource name first.', 'error', 'cgAlert'); return; }
+  _cgPerms.push({ resource_type: t, resource_name: n, permission_level: l });
+  renderCgPerms();
+  document.getElementById('cgPName').value = '';
+}
+
+function renderCgPerms() {
+  const tb = document.getElementById('cgPermRows');
+  if (!_cgPerms.length) {
+    tb.innerHTML = `<tr><td colspan="4" style="color:var(--text-muted);padding:1rem">No permissions added yet</td></tr>`;
+    return;
+  }
+  tb.innerHTML = _cgPerms.map((p, i) => `
+    <tr>
+      <td><span class="badge badge-${p.resource_type}">${p.resource_type}</span></td>
+      <td><code>${p.resource_name}</code></td>
+      <td>${p.permission_level}</td>
+      <td>
+        <button class="btn btn-danger btn-sm"
+                onclick="_cgPerms.splice(${i},1); renderCgPerms()">✕</button>
+      </td>
+    </tr>`).join('');
+}
+
+async function saveGroup() {
+  const name = document.getElementById('cgName').value.trim();
+  if (!name) { showAlert('Group name is required.', 'error', 'cgAlert'); return; }
+  const desc = document.getElementById('cgDesc').value.trim();
+
+  const d = await api('/api/groups', {
+    method: 'POST', body: JSON.stringify({ name, description: desc })
+  });
+  if (!d || !d.success) {
+    showAlert(d?.error || 'Failed to create group.', 'error', 'cgAlert'); return;
+  }
+
+  const gid = d.group_id;
+
+  // Add selected members
+  const checks = document.querySelectorAll('#cgMemberChecks input:checked');
+  for (const c of checks) {
+    await api(`/api/groups/${gid}/members`, {
+      method: 'POST', body: JSON.stringify({ user_id: parseInt(c.value) })
+    });
+  }
+
+  // Add staged permissions
+  for (const p of _cgPerms) {
+    await api(`/api/groups/${gid}/permissions`, {
+      method: 'POST', body: JSON.stringify(p)
+    });
+  }
+
+  showAlert(`Group "${name}" created successfully.`);
+  closeModal('createGroupModal');
+
+  // Reset wizard
+  document.getElementById('cgName').value = '';
+  document.getElementById('cgDesc').value = '';
+  document.querySelectorAll('#cgMemberChecks input').forEach(c => c.checked = false);
+  _cgPerms = [];
+  renderCgPerms();
+
+  await loadGroups();
+}
+
+/* Group Detail Modal ───────────────────────────────────────── */
+async function openGroupDetail(gid, name) {
+  _curGroupId = gid;
+  document.getElementById('gdTitle').textContent = name;
+  openModal('groupDetailModal');
+  await Promise.all([loadGdMembers(), loadGdPerms()]);
+}
+
+async function loadGdMembers() {
+  const d  = await api(`/api/groups/${_curGroupId}/members`);
+  const tb = document.getElementById('gdMemberRows');
+  tb.innerHTML = '';
+  if (!d || !d.members.length) {
+    tb.innerHTML = `<tr><td colspan="4" style="color:var(--text-muted);padding:1rem">No members yet</td></tr>`;
+    return;
+  }
+  d.members.forEach(m => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><strong>${m.username}</strong></td>
+      <td style="color:var(--text-muted)">${m.email}</td>
+      <td><span class="badge badge-${m.role}">${m.role}</span></td>
+      <td>
+        <button class="btn btn-danger btn-sm"
+                onclick="removeMember(${m.id})">Remove</button>
+      </td>`;
+    tb.appendChild(tr);
+  });
+}
+
+async function loadGdPerms() {
+  const d  = await api(`/api/groups/${_curGroupId}/permissions`);
+  const tb = document.getElementById('gdPermRows');
+  tb.innerHTML = '';
+  if (!d || !d.permissions.length) {
+    tb.innerHTML = `<tr><td colspan="4" style="color:var(--text-muted);padding:1rem">No permissions yet</td></tr>`;
+    return;
+  }
+  d.permissions.forEach(p => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><span class="badge badge-${p.resource_type}">${p.resource_type}</span></td>
+      <td><code>${p.resource_name}</code></td>
+      <td>${p.permission_level}</td>
+      <td>
+        <button class="btn btn-danger btn-sm"
+                onclick="removeGdPerm(${p.id})">Remove</button>
+      </td>`;
+    tb.appendChild(tr);
+  });
+}
+
+async function addMember() {
+  const uid = document.getElementById('amUserSel').value;
+  if (!uid) return;
+  const d = await api(`/api/groups/${_curGroupId}/members`, {
+    method: 'POST', body: JSON.stringify({ user_id: parseInt(uid) })
+  });
+  if (d && d.success) {
+    showAlert('Member added.');
+    closeModal('addMemberModal');
+    await loadGdMembers();
+  } else {
+    showAlert(d?.error || 'Failed to add member.', 'error');
+  }
+}
+
+async function removeMember(uid) {
+  if (!confirm('Remove this member from the group?')) return;
+  const d = await api(`/api/groups/${_curGroupId}/members/${uid}`, { method: 'DELETE' });
+  if (d && d.success) {
+    showAlert('Member removed.');
+    await loadGdMembers();
+  } else {
+    showAlert('Failed to remove member.', 'error');
+  }
+}
+
+async function gdAddPerm() {
+  const body = {
+    resource_type:    document.getElementById('gdPType').value,
+    resource_name:    document.getElementById('gdPName').value.trim(),
+    permission_level: document.getElementById('gdPLevel').value
+  };
+  if (!body.resource_name) return;
+  const d = await api(`/api/groups/${_curGroupId}/permissions`, {
+    method: 'POST', body: JSON.stringify(body)
+  });
+  if (d && d.success) {
+    showAlert('Permission added.');
+    document.getElementById('gdPName').value = '';
+    await loadGdPerms();
+  } else {
+    showAlert('Failed to add permission.', 'error');
+  }
+}
+
+async function removeGdPerm(pid) {
+  if (!confirm('Remove this permission?')) return;
+  const d = await api(`/api/groups/${_curGroupId}/permissions/${pid}`, { method: 'DELETE' });
+  if (d && d.success) {
+    showAlert('Permission removed.');
+    await loadGdPerms();
+  } else {
+    showAlert('Failed to remove permission.', 'error');
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   LOGS PANEL
+   ───────────────────────────────────────────────────────────── */
+async function loadLogs() {
+  const d = await api('/api/admin/logs');
+  const tb = document.getElementById('logsTbody');
+  if (!d || !d.logs || !d.logs.length) {
+    tb.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted)">No activity logs found</td></tr>`;
+    return;
+  }
+  tb.innerHTML = d.logs.map(l => `
+    <tr>
+      <td><strong>${l.username || l.user_id}</strong></td>
+      <td>${l.action}</td>
+      <td><code>${l.resource || '–'}</code></td>
+      <td style="color:var(--text-muted);font-size:.85rem">${l.ip_address || '–'}</td>
+      <td style="color:var(--text-muted);font-size:.85rem">
+        ${l.timestamp ? new Date(l.timestamp).toLocaleString() : '–'}
+      </td>
+    </tr>`).join('');
+}
+</script>
 </body>
 </html>

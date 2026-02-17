@@ -1,945 +1,684 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Data Dictionary - Interactive Catalog</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        :root {
-            --primary: #2563eb;
-            --primary-dark: #1e40af;
-            --secondary: #10b981;
-            --danger: #ef4444;
-            --warning: #f59e0b;
-            --bg-primary: #ffffff;
-            --bg-secondary: #f3f4f6;
-            --bg-tertiary: #e5e7eb;
-            --text-primary: #111827;
-            --text-secondary: #6b7280;
-            --border: #d1d5db;
-            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: var(--bg-secondary);
-            color: var(--text-primary);
-            line-height: 1.6;
-        }
-
-        /* Main App */
-        .app-container {
-            display: flex;
-            min-height: 100vh;
-        }
-
-        /* Sidebar */
-        .sidebar {
-            width: 260px;
-            background: var(--bg-primary);
-            border-right: 1px solid var(--border);
-            padding: 1.5rem;
-            overflow-y: auto;
-        }
-
-        .sidebar-header {
-            margin-bottom: 2rem;
-        }
-
-        .sidebar-title {
-            font-size: 1.25rem;
-            font-weight: 700;
-            color: var(--primary);
-        }
-
-        .sidebar-user {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.75rem;
-            background: var(--bg-secondary);
-            border-radius: 8px;
-            margin-top: 1rem;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .sidebar-user:hover {
-            background: var(--bg-tertiary);
-        }
-
-        .user-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: var(--primary);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-        }
-
-        .user-info h3 {
-            font-size: 0.875rem;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
-        .user-info h3:hover {
-            color: var(--primary);
-        }
-
-        .user-role {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            text-transform: capitalize;
-        }
-
-        .sidebar-nav {
-            list-style: none;
-        }
-
-        .nav-item {
-            margin-bottom: 0.5rem;
-        }
-
-        .nav-link {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.75rem 1rem;
-            color: var(--text-secondary);
-            text-decoration: none;
-            border-radius: 6px;
-            transition: all 0.2s;
-            cursor: pointer;
-        }
-
-        .nav-link:hover,
-        .nav-link.active {
-            background: var(--bg-secondary);
-            color: var(--primary);
-        }
-
-        .nav-icon {
-            font-size: 1.25rem;
-        }
-
-        /* Main Content */
-        .main-content {
-            flex: 1;
-            padding: 2rem;
-            overflow-y: auto;
-        }
-
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-        }
-
-        .header-title {
-            font-size: 1.875rem;
-            font-weight: 700;
-        }
-
-        .header-actions {
-            display: flex;
-            gap: 1rem;
-        }
-
-        .btn {
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 6px;
-            font-size: 1rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-            text-decoration: none;
-            display: inline-block;
-        }
-
-        .btn-primary {
-            background: var(--primary);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: var(--primary-dark);
-        }
-
-        .btn-logout {
-            background: var(--danger);
-            color: white;
-        }
-
-        .btn-logout:hover {
-            background: #dc2626;
-        }
-
-        .btn-export {
-            background: var(--secondary);
-            color: white;
-        }
-
-        .btn-export:hover {
-            background: #059669;
-        }
-
-        /* Search Bar */
-        .search-container {
-            background: var(--bg-primary);
-            padding: 2rem;
-            border-radius: 12px;
-            box-shadow: var(--shadow);
-            margin-bottom: 2rem;
-        }
-
-        .search-box {
-            position: relative;
-        }
-
-        .search-input {
-            width: 100%;
-            padding: 1rem 1rem 1rem 3rem;
-            border: 2px solid var(--border);
-            border-radius: 8px;
-            font-size: 1.125rem;
-        }
-
-        .search-input:focus {
-            outline: none;
-            border-color: var(--primary);
-        }
-
-        .search-icon {
-            position: absolute;
-            left: 1rem;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-secondary);
-            font-size: 1.25rem;
-        }
-
-        .search-filters {
-            display: flex;
-            gap: 1rem;
-            margin-top: 1rem;
-        }
-
-        .filter-select {
-            padding: 0.5rem 1rem;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            background: white;
-        }
-
-        /* Stats Cards */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-
-        .stat-card {
-            background: var(--bg-primary);
-            padding: 1.5rem;
-            border-radius: 12px;
-            box-shadow: var(--shadow);
-        }
-
-        .stat-value {
-            font-size: 2rem;
-            font-weight: 700;
-            color: var(--primary);
-        }
-
-        .stat-label {
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-            margin-top: 0.25rem;
-        }
-
-        /* Results */
-        .results-container {
-            background: var(--bg-primary);
-            border-radius: 12px;
-            box-shadow: var(--shadow);
-            overflow: hidden;
-        }
-
-        .results-header {
-            padding: 1.5rem;
-            border-bottom: 1px solid var(--border);
-            font-weight: 600;
-        }
-
-        .result-item {
-            padding: 1.5rem;
-            border-bottom: 1px solid var(--border);
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-
-        .result-item:hover {
-            background: var(--bg-secondary);
-        }
-
-        .result-item:last-child {
-            border-bottom: none;
-        }
-
-        .result-type {
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            background: var(--primary);
-            color: white;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            margin-bottom: 0.5rem;
-        }
-
-        .result-type.column {
-            background: var(--secondary);
-        }
-
-        .result-title {
-            font-size: 1.125rem;
-            font-weight: 600;
-            margin-bottom: 0.25rem;
-        }
-
-        .result-path {
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-            font-family: 'Courier New', monospace;
-        }
-
-        .result-description {
-            margin-top: 0.5rem;
-            color: var(--text-secondary);
-        }
-
-        /* Table Details Modal */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal.active {
-            display: flex;
-        }
-
-        .modal-content {
-            background: white;
-            border-radius: 12px;
-            max-width: 900px;
-            width: 90%;
-            max-height: 90vh;
-            overflow-y: auto;
-            box-shadow: var(--shadow-lg);
-        }
-
-        .modal-header {
-            padding: 1.5rem;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .modal-title {
-            font-size: 1.5rem;
-            font-weight: 700;
-        }
-
-        .modal-close {
-            background: none;
-            border: none;
-            font-size: 1.5rem;
-            cursor: pointer;
-            color: var(--text-secondary);
-        }
-
-        .modal-body {
-            padding: 1.5rem;
-        }
-
-        .table-info {
-            margin-bottom: 2rem;
-        }
-
-        .info-row {
-            display: flex;
-            padding: 0.75rem 0;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .info-label {
-            width: 150px;
-            font-weight: 600;
-            color: var(--text-secondary);
-        }
-
-        .info-value {
-            flex: 1;
-        }
-
-        .columns-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .columns-table th {
-            text-align: left;
-            padding: 0.75rem;
-            background: var(--bg-secondary);
-            font-weight: 600;
-            border-bottom: 2px solid var(--border);
-        }
-
-        .columns-table td {
-            padding: 0.75rem;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-
-        .badge-primary {
-            background: #dbeafe;
-            color: #1e40af;
-        }
-
-        .badge-success {
-            background: #d1fae5;
-            color: #065f46;
-        }
-
-        .badge-warning {
-            background: #fef3c7;
-            color: #92400e;
-        }
-
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 4rem 2rem;
-            color: var(--text-secondary);
-        }
-
-        .empty-icon {
-            font-size: 4rem;
-            margin-bottom: 1rem;
-            opacity: 0.5;
-        }
-
-        /* Loading */
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 2rem;
-        }
-
-        .loading.active {
-            display: block;
-        }
-
-        .spinner {
-            border: 3px solid var(--border);
-            border-top-color: var(--primary);
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .sidebar {
-                display: none;
-            }
-
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data Dictionary – Catalog</title>
+  <link rel="stylesheet" href="/static/styles/main.css">
+  <!-- Prevent theme flash before paint -->
+  <script>(function(){const t=localStorage.getItem('theme')||'light';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
-    <!-- Main App -->
-    <div class="app-container" id="appContainer">
-        <!-- Sidebar -->
-        <aside class="sidebar">
-            <div class="sidebar-header">
-                <div class="sidebar-title">📚 Data Dictionary</div>
-                <div class="sidebar-user" onclick="window.location.href='/profile'">
-                    <div class="user-avatar" id="userAvatar">A</div>
-                    <div class="user-info">
-                        <h3 id="userName">Admin</h3>
-                        <div class="user-role" id="userRole">admin</div>
-                    </div>
-                </div>
-            </div>
-            
-            <nav>
-                <ul class="sidebar-nav" id="sidebarNav">
-                    <li class="nav-item">
-                        <a href="#" class="nav-link active" data-view="search">
-                            <span class="nav-icon">🔍</span>
-                            Search
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" data-view="browse">
-                            <span class="nav-icon">📂</span>
-                            Browse
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" data-view="stats">
-                            <span class="nav-icon">📊</span>
-                            Statistics
-                        </a>
-                    </li>
-                    <!-- Admin button will be added here dynamically -->
-                </ul>
-            </nav>
-        </aside>
+<div class="app-layout">
 
-        <!-- Main Content -->
-        <main class="main-content">
-            <header class="header">
-                <h1 class="header-title">Data Catalog</h1>
-                <div class="header-actions">
-                    <!-- Export button (shows if user has permission) -->
-                    <button class="btn btn-export" id="exportBtn" style="display: none;">
-                        📄 Export PDF
-                    </button>
-                    <button class="btn btn-logout" id="logoutBtn">Logout</button>
-                </div>
-            </header>
+  <!-- ═══════════════════════════════════════════════════════
+       SIDEBAR  (shared component)
+       ═══════════════════════════════════════════════════════ -->
+  {% include 'components/sidebar.html' %}
 
-            <!-- Stats -->
-            <div class="stats-grid" id="statsGrid">
-                <div class="stat-card">
-                    <div class="stat-value" id="statSchemas">0</div>
-                    <div class="stat-label">Databases</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="statTables">0</div>
-                    <div class="stat-label">Tables</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="statColumns">0</div>
-                    <div class="stat-label">Columns</div>
-                </div>
-            </div>
+  <!-- ═══════════════════════════════════════════════════════
+       MAIN AREA
+       ═══════════════════════════════════════════════════════ -->
+  <div class="main-area">
 
-            <!-- Search -->
-            <div class="search-container">
-                <div class="search-box">
-                    <span class="search-icon">🔍</span>
-                    <input 
-                        type="text" 
-                        class="search-input" 
-                        id="searchInput"
-                        placeholder="Search tables, columns, schemas..."
-                    >
-                </div>
-                <div class="search-filters">
-                    <select class="filter-select" id="schemaFilter">
-                        <option value="">All Schemas</option>
-                    </select>
-                    <select class="filter-select" id="tableTypeFilter">
-                        <option value="">All Types</option>
-                        <option value="BASE TABLE">Tables</option>
-                        <option value="VIEW">Views</option>
-                    </select>
-                </div>
-            </div>
+    <!-- Top bar -->
+    <header class="topbar">
+      <span class="topbar-title" id="topbarTitle">Data Catalog</span>
+      <div class="topbar-actions">
+        <button class="btn btn-success btn-sm" id="exportBtn"
+                style="display:none" onclick="exportPDF()">
+          📄 Export PDF
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="logout()">Logout</button>
+      </div>
+    </header>
 
-            <!-- Loading -->
-            <div class="loading" id="loading">
-                <div class="spinner"></div>
-                <p style="margin-top: 1rem;">Searching...</p>
-            </div>
+    <!-- Page body — all panels live here -->
+    <div class="page-body">
+      <div id="globalAlert" class="alert"></div>
 
-            <!-- Results -->
-            <div class="results-container" id="resultsContainer" style="display: none;">
-                <div class="results-header">
-                    <span id="resultsCount">0 results</span>
-                </div>
-                <div id="resultsBody"></div>
-            </div>
+      <!-- ╔═══════════════════════════════════════════════╗
+           ║  PANEL: SEARCH                               ║
+           ╚═══════════════════════════════════════════════╝ -->
+      <div class="panel active" id="panel-search">
 
-            <!-- Empty State -->
-            <div class="empty-state" id="emptyState">
-                <div class="empty-icon">🔍</div>
-                <h2>Start Searching</h2>
-                <p>Search for tables, columns, or schemas to explore your data dictionary</p>
-            </div>
-        </main>
-    </div>
-
-    <!-- Table Details Modal -->
-    <div class="modal" id="tableModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 class="modal-title" id="modalTitle">Table Details</h2>
-                <button class="modal-close" id="modalClose">&times;</button>
-            </div>
-            <div class="modal-body" id="modalBody">
-                <!-- Content loaded dynamically -->
-            </div>
+        <!-- Stats row -->
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-value" id="statSchemas">–</div>
+            <div class="stat-label">Databases</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="statTables">–</div>
+            <div class="stat-label">Tables</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="statColumns">–</div>
+            <div class="stat-label">Columns</div>
+          </div>
         </div>
+
+        <!-- Search bar -->
+        <div class="search-bar">
+          <div class="search-wrap">
+            <span class="search-icon">🔍</span>
+            <input class="search-input-field" type="text" id="searchInput"
+                   autocomplete="off"
+                   placeholder="Search tables, columns, schemas…">
+          </div>
+          <div class="search-filters">
+            <select class="form-select" id="schemaFilter">
+              <option value="">All Schemas</option>
+            </select>
+            <select class="form-select" id="typeFilter">
+              <option value="">All Types</option>
+              <option value="BASE TABLE">Tables</option>
+              <option value="VIEW">Views</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Search spinner -->
+        <div class="spinner-wrap" id="searchSpinner" style="display:none">
+          <div class="spinner"></div>
+          <p>Searching…</p>
+        </div>
+
+        <!-- Results card -->
+        <div class="card" id="resultsCard" style="display:none; overflow:hidden">
+          <div class="results-header">
+            <span id="resultsCount"></span>
+          </div>
+          <div id="resultsBody"></div>
+        </div>
+
+        <!-- Empty state -->
+        <div class="empty-state" id="emptyState">
+          <div class="empty-icon">🔍</div>
+          <h2>Start Searching</h2>
+          <p>Search for tables, columns, or schemas to explore your data dictionary</p>
+        </div>
+
+      </div><!-- /panel-search -->
+
+      <!-- ╔═══════════════════════════════════════════════╗
+           ║  PANEL: BROWSE                               ║
+           ╚═══════════════════════════════════════════════╝ -->
+      <div class="panel" id="panel-browse">
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem;">
+          <h2 style="font-size:1.25rem; font-weight:700;">Browse Schemas &amp; Tables</h2>
+          <div style="display:flex; gap:.625rem; align-items:center;">
+            <input class="form-input" type="text" id="browseSearch"
+                   placeholder="Filter tables…" style="width:220px; height:36px; padding:.4rem .75rem; font-size:.875rem">
+            <select class="form-select" id="browseTypeFilter" style="width:140px; height:36px; font-size:.875rem">
+              <option value="">All Types</option>
+              <option value="table">Tables</option>
+              <option value="view">Views</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Browse spinner -->
+        <div class="spinner-wrap" id="browseSpinner">
+          <div class="spinner"></div>
+          <p>Loading schemas…</p>
+        </div>
+
+        <!-- Schema accordion list -->
+        <div class="schema-list" id="schemaList"></div>
+
+      </div><!-- /panel-browse -->
+
+      <!-- ╔═══════════════════════════════════════════════╗
+           ║  PANEL: STATISTICS                           ║
+           ╚═══════════════════════════════════════════════╝ -->
+      <div class="panel" id="panel-stats">
+
+        <h2 style="font-size:1.25rem; font-weight:700; margin-bottom:1.375rem;">
+          Catalog Statistics
+        </h2>
+
+        <div class="stats-row" style="margin-bottom:1.75rem;">
+          <div class="stat-card">
+            <div class="stat-value" id="statSchemas2">–</div>
+            <div class="stat-label">Accessible Databases</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="statTables2">–</div>
+            <div class="stat-label">Tables</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="statColumns2">–</div>
+            <div class="stat-label">Columns</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><span class="card-title">Top Schemas by Table Count</span></div>
+          <div style="overflow:auto">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Schema</th>
+                  <th>Tables</th>
+                  <th style="width:50%">Distribution</th>
+                </tr>
+              </thead>
+              <tbody id="schemaStatsTbody">
+                <tr><td colspan="3" style="color:var(--text-muted); padding:1.5rem; text-align:center">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div><!-- /panel-stats -->
+
+      <!-- ╔═══════════════════════════════════════════════╗
+           ║  PANEL: MY PROFILE                           ║
+           ╚═══════════════════════════════════════════════╝ -->
+      <div class="panel" id="panel-profile">
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; align-items:start;">
+
+          <!-- Left col -->
+          <div style="display:flex; flex-direction:column; gap:1.25rem;">
+
+            <!-- Profile info card -->
+            <div class="card">
+              <div class="card-header"><span class="card-title">👤 Profile Information</span></div>
+              <div class="card-body">
+                <div class="info-grid">
+                  <div class="info-label">Username</div>    <div id="pUsername">–</div>
+                  <div class="info-label">Email</div>       <div id="pEmail">–</div>
+                  <div class="info-label">Role</div>        <div><span class="badge" id="pRole">–</span></div>
+                  <div class="info-label">PDF Export</div>  <div><span class="badge" id="pExport">–</span></div>
+                  <div class="info-label">Member Since</div><div id="pSince" style="color:var(--text-secondary)">–</div>
+                  <div class="info-label">Last Login</div>  <div id="pLast"  style="color:var(--text-secondary)">–</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- My Groups card -->
+            <div class="card">
+              <div class="card-header"><span class="card-title">👥 My Groups</span></div>
+              <div class="card-body" id="myGroupsBody">
+                <p style="color:var(--text-muted)">Loading…</p>
+              </div>
+            </div>
+
+          </div><!-- /left col -->
+
+          <!-- Right col -->
+          <div style="display:flex; flex-direction:column; gap:1.25rem;">
+
+            <!-- Change password card -->
+            <div class="card">
+              <div class="card-header"><span class="card-title">🔑 Change Password</span></div>
+              <div class="card-body">
+                <div id="pwAlert" class="alert"></div>
+                <div class="form-group">
+                  <label class="form-label">Current Password</label>
+                  <input class="form-input" type="password" id="pwCur" placeholder="••••••••">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">New Password</label>
+                  <input class="form-input" type="password" id="pwNew" minlength="8" placeholder="Min 8 characters">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Confirm New Password</label>
+                  <input class="form-input" type="password" id="pwCf" placeholder="Re-enter new password">
+                </div>
+                <button class="btn btn-primary" onclick="changePw()">Change Password</button>
+              </div>
+            </div>
+
+            <!-- My Permissions card -->
+            <div class="card">
+              <div class="card-header"><span class="card-title">🔑 My Permissions</span></div>
+              <div class="card-body" id="myPermsBody">
+                <p style="color:var(--text-muted)">Loading…</p>
+              </div>
+            </div>
+
+          </div><!-- /right col -->
+        </div>
+
+      </div><!-- /panel-profile -->
+
+    </div><!-- /page-body -->
+  </div><!-- /main-area -->
+
+</div><!-- /app-layout -->
+
+<!-- ═══════════════════════════════════════════════════════════
+     FOOTER  (shared component)
+     ═══════════════════════════════════════════════════════════ -->
+{% include 'components/footer.html' %}
+
+<!-- ═══════════════════════════════════════════════════════════
+     TABLE DETAILS MODAL
+     ═══════════════════════════════════════════════════════════ -->
+<div class="modal-backdrop" id="tableModal">
+  <div class="modal-box modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="modalTitle">Table Details</span>
+      <button class="modal-close" onclick="closeModal('tableModal')">&times;</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SCRIPTS
+     ═══════════════════════════════════════════════════════════ -->
+<script src="/static/scripts/app.js"></script>
+<script>
+/* ── Panel routing ──────────────────────────────────────────── */
+const PANEL_LABELS = {
+  search:  'Data Catalog',
+  browse:  'Browse Schemas & Tables',
+  stats:   'Statistics',
+  profile: 'My Profile'
+};
+
+function showPanel(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('[data-panel]').forEach(l => l.classList.remove('active'));
+  const panel = document.getElementById('panel-' + name);
+  if (panel) panel.classList.add('active');
+  const link = document.querySelector(`[data-panel="${name}"]`);
+  if (link) link.classList.add('active');
+  document.getElementById('topbarTitle').textContent = PANEL_LABELS[name] || name;
+  history.replaceState(null, '', '#' + name);
+}
+
+window.addEventListener('hashchange', () =>
+  showPanel(location.hash.replace('#', '') || 'search')
+);
+
+/* ── Init ───────────────────────────────────────────────────── */
+window.addEventListener('DOMContentLoaded', async () => {
+  const user = getUser();
+  if (!user) { location.href = '/signin'; return; }
+
+  initSidebar(user);
+
+  // Wire sidebar nav links to panels (index.html uses hash SPA)
+  document.querySelectorAll('[data-panel]').forEach(el => {
+    el.addEventListener('click', e => {
+      if (el.tagName === 'A' && el.href.includes('/#')) {
+        e.preventDefault();
+        showPanel(el.getAttribute('data-panel'));
+      }
+    });
+  });
+
+  // Route to panel from URL hash
+  const hash = location.hash.replace('#', '') || 'search';
+  showPanel(hash);
+
+  // Load data
+  await Promise.all([loadStats(), loadBrowse(), loadProfile()]);
+});
+
+/* ── Stats ──────────────────────────────────────────────────── */
+async function loadStats() {
+  const d = await api('/api/stats');
+  if (!d) return;
+
+  ['statSchemas','statSchemas2'].forEach(id =>
+    document.getElementById(id).textContent = d.schemas
+  );
+  ['statTables','statTables2'].forEach(id =>
+    document.getElementById(id).textContent = d.tables
+  );
+  ['statColumns','statColumns2'].forEach(id =>
+    document.getElementById(id).textContent = d.columns
+  );
+
+  // Populate schema filter dropdown
+  const sc = await api('/api/schemas');
+  if (!sc) return;
+  const sel = document.getElementById('schemaFilter');
+  sc.schemas.forEach(s => {
+    const o = document.createElement('option');
+    o.value = s.name;
+    o.textContent = `${s.name} (${s.table_count} tables)`;
+    sel.appendChild(o);
+  });
+
+  // Stats table — distribution bars
+  const maxTables = Math.max(...sc.schemas.map(s => s.table_count), 1);
+  const tb = document.getElementById('schemaStatsTbody');
+  tb.innerHTML = '';
+  sc.schemas.forEach(s => {
+    const pct = Math.round((s.table_count / maxTables) * 100);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><strong>${s.name}</strong></td>
+      <td>${s.table_count}</td>
+      <td>
+        <div style="background:var(--bg-subtle);border-radius:4px;height:10px;overflow:hidden">
+          <div style="width:${pct}%;height:100%;background:var(--primary);border-radius:4px;transition:width .6s ease"></div>
+        </div>
+      </td>`;
+    tb.appendChild(tr);
+  });
+}
+
+/* ── Search ─────────────────────────────────────────────────── */
+let _searchTimer;
+
+document.addEventListener('DOMContentLoaded', () => {
+  const input = document.getElementById('searchInput');
+  if (!input) return;
+
+  input.addEventListener('input', e => {
+    clearTimeout(_searchTimer);
+    const q = e.target.value.trim();
+    if (q.length < 2) {
+      document.getElementById('emptyState').style.display = 'block';
+      document.getElementById('resultsCard').style.display = 'none';
+      return;
+    }
+    _searchTimer = setTimeout(() => doSearch(q), 300);
+  });
+
+  // Re-run search when filters change
+  ['schemaFilter', 'typeFilter'].forEach(id => {
+    document.getElementById(id).addEventListener('change', () => {
+      const q = document.getElementById('searchInput').value.trim();
+      if (q.length >= 2) doSearch(q);
+    });
+  });
+});
+
+async function doSearch(q) {
+  document.getElementById('searchSpinner').style.display = 'block';
+  document.getElementById('resultsCard').style.display   = 'none';
+  document.getElementById('emptyState').style.display    = 'none';
+
+  const schema = document.getElementById('schemaFilter').value;
+  const type   = document.getElementById('typeFilter').value;
+  let url = `/api/search?q=${encodeURIComponent(q)}`;
+  if (schema) url += `&schema=${schema}`;
+  if (type)   url += `&table_type=${type}`;
+
+  const d = await api(url);
+  document.getElementById('searchSpinner').style.display = 'none';
+
+  if (!d || !d.results.length) {
+    document.getElementById('emptyState').style.display = 'block';
+    return;
+  }
+
+  document.getElementById('resultsCount').textContent =
+    `${d.results.length} result${d.results.length !== 1 ? 's' : ''}`;
+
+  const body = document.getElementById('resultsBody');
+  body.innerHTML = '';
+
+  d.results.forEach(r => {
+    const el = document.createElement('div');
+    el.className = 'result-item';
+
+    if (r.type === 'table') {
+      el.innerHTML = `
+        <span class="result-tag tag-table">table</span>
+        <div class="result-title">${r.table}</div>
+        <div class="result-path">${r.schema}.${r.table}</div>
+        ${r.description ? `<div class="result-desc">${r.description}</div>` : ''}
+        <div class="result-meta">
+          ${r.column_count} columns &bull; ${(r.meta || {}).row_count || 0} rows
+        </div>`;
+    } else {
+      el.innerHTML = `
+        <span class="result-tag tag-column">column</span>
+        <div class="result-title">${r.column}</div>
+        <div class="result-path">${r.schema}.${r.table}.${r.column}</div>
+        <div class="result-meta"><span class="badge badge-primary">${r.data_type}</span></div>
+        ${r.description ? `<div class="result-desc">${r.description}</div>` : ''}`;
+    }
+    el.onclick = () => openTableModal(r.schema, r.table);
+    body.appendChild(el);
+  });
+
+  document.getElementById('resultsCard').style.display = 'block';
+}
+
+/* ── Browse ─────────────────────────────────────────────────── */
+let _browseData = []; // cache for filter
+
+async function loadBrowse() {
+  const sc = await api('/api/schemas');
+  document.getElementById('browseSpinner').style.display = 'none';
+  if (!sc) return;
+  _browseData = sc.schemas;
+  renderBrowse(_browseData);
+}
+
+function renderBrowse(schemas) {
+  const list = document.getElementById('schemaList');
+  list.innerHTML = '';
+  schemas.forEach(s => {
+    const item = document.createElement('div');
+    item.className = 'schema-item';
+    item.innerHTML = `
+      <div class="schema-item-header" onclick="toggleSchema(this, '${s.name}')">
+        <div class="schema-name">
+          🗄️ ${s.name}
+          <span class="badge badge-viewer">${s.table_count} table${s.table_count !== 1 ? 's' : ''}</span>
+        </div>
+        <span class="schema-chevron">▶</span>
+      </div>
+      <div class="table-list" id="tbl-${s.name}">
+        <div class="spinner-wrap" style="padding:.875rem 0">
+          <div class="spinner" style="width:22px;height:22px;border-width:2px"></div>
+        </div>
+      </div>`;
+    list.appendChild(item);
+  });
+}
+
+// Live filter for browse panel
+document.addEventListener('DOMContentLoaded', () => {
+  const bs = document.getElementById('browseSearch');
+  const bt = document.getElementById('browseTypeFilter');
+  if (bs) bs.addEventListener('input', filterBrowse);
+  if (bt) bt.addEventListener('change', filterBrowse);
+});
+
+function filterBrowse() {
+  const q    = document.getElementById('browseSearch').value.toLowerCase();
+  const type = document.getElementById('browseTypeFilter').value.toLowerCase();
+  const filtered = _browseData.filter(s =>
+    s.name.toLowerCase().includes(q) || !q
+  );
+  renderBrowse(filtered);
+}
+
+async function toggleSchema(hdr, schema) {
+  hdr.classList.toggle('open');
+  const tl = document.getElementById('tbl-' + schema);
+  if (!tl) return;
+  tl.classList.toggle('open');
+  if (tl.dataset.loaded) return;
+  tl.dataset.loaded = '1';
+
+  const d = await api(`/api/schemas/${schema}/tables`);
+  tl.innerHTML = '';
+
+  if (!d || !d.tables.length) {
+    tl.innerHTML = `<div style="padding:.75rem 2.75rem;color:var(--text-muted);font-size:.875rem">No tables found</div>`;
+    return;
+  }
+
+  // Apply browse type filter
+  const typeFilter = document.getElementById('browseTypeFilter').value.toLowerCase();
+
+  d.tables
+    .filter(t => !typeFilter || (t.table_type || '').toLowerCase().includes(typeFilter))
+    .forEach(t => {
+      const row = document.createElement('div');
+      row.className = 'table-row';
+      row.innerHTML = `
+        <div class="table-row-name">
+          ${t.table_type === 'VIEW' ? '👁️' : '📋'} ${t.name}
+          ${t.table_type === 'VIEW' ? '<span class="badge badge-purple" style="margin-left:.4rem">view</span>' : ''}
+          ${t.description
+            ? `<span style="color:var(--text-muted);font-size:.8rem;margin-left:.5rem">— ${t.description.slice(0,50)}</span>`
+            : ''}
+        </div>
+        <div class="table-row-meta">${t.column_count} col${t.column_count !== 1 ? 's' : ''}</div>`;
+      row.onclick = () => openTableModal(schema, t.name);
+      tl.appendChild(row);
+    });
+}
+
+/* ── Table Modal ────────────────────────────────────────────── */
+async function openTableModal(schema, table) {
+  document.getElementById('tableModal').classList.add('open');
+  document.getElementById('modalTitle').textContent = `${schema}.${table}`;
+  document.getElementById('modalBody').innerHTML =
+    '<div class="spinner-wrap"><div class="spinner"></div></div>';
+
+  const d = await api(`/api/schemas/${schema}/tables/${table}`);
+  if (!d) {
+    document.getElementById('modalBody').innerHTML =
+      '<p style="color:var(--danger)">Error loading table details.</p>';
+    return;
+  }
+
+  document.getElementById('modalBody').innerHTML = `
+    <div class="info-grid" style="margin-bottom:1.5rem">
+      <div class="info-label">Schema</div>       <div>${d.schema}</div>
+      <div class="info-label">Table</div>        <div>${d.table}</div>
+      ${d.description ? `<div class="info-label">Description</div><div>${d.description}</div>` : ''}
+      <div class="info-label">Type</div>         <div>${d.table_type || 'TABLE'}</div>
+      <div class="info-label">Row Count</div>    <div>${(d.meta || {}).row_count ?? 'Unknown'}</div>
     </div>
 
-    <script>
-        // Global state
-        let currentUser = null;
-        const API_URL = '';
+    <h3 style="font-size:1rem;font-weight:600;margin-bottom:.875rem">
+      Columns (${d.columns.length})
+    </h3>
+    <table class="col-table">
+      <thead>
+        <tr>
+          <th>Column</th>
+          <th>Type</th>
+          <th>Nullable</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${d.columns.map(c => `
+          <tr>
+            <td>
+              <strong>${c.name}</strong>
+              ${(c.meta || {}).is_primary_key
+                ? '<span class="badge badge-warning" style="margin-left:.3rem">PK</span>' : ''}
+              ${(c.meta || {}).is_foreign_key
+                ? '<span class="badge badge-success" style="margin-left:.3rem">FK</span>' : ''}
+            </td>
+            <td><code>${c.data_type}</code></td>
+            <td>${(c.meta || {}).is_nullable !== false ? 'Yes' : 'No'}</td>
+            <td style="color:var(--text-secondary)">${c.description || '–'}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
 
-        // Check authentication on page load
-        window.addEventListener('DOMContentLoaded', async () => {
-            const user = JSON.parse(sessionStorage.getItem('user') || '{}');
-            
-            // Redirect to signin if not logged in
-            if (!user.username) {
-                window.location.href = '/signin';
-                return;
-            }
+/* ── Profile Panel ──────────────────────────────────────────── */
+async function loadProfile() {
+  const d = await api('/api/auth/me');
+  if (!d) return;
 
-            currentUser = user;
-            initializeApp();
-        });
+  document.getElementById('pUsername').textContent = d.username;
+  document.getElementById('pEmail').textContent    = d.email;
+  document.getElementById('pSince').textContent    = d.created_at
+    ? new Date(d.created_at).toLocaleDateString() : '–';
+  document.getElementById('pLast').textContent     = d.last_login
+    ? new Date(d.last_login).toLocaleString() : 'Never';
 
-        // Initialize app
-        function initializeApp() {
-            // Update user info in sidebar
-            document.getElementById('userName').textContent = currentUser.username;
-            document.getElementById('userRole').textContent = currentUser.role;
-            document.getElementById('userAvatar').textContent = currentUser.username[0].toUpperCase();
+  const rb = document.getElementById('pRole');
+  rb.textContent = d.role;
+  rb.className   = `badge badge-${d.role}`;
 
-            // Show admin button if user is admin
-            if (currentUser.role === 'admin') {
-                const adminLink = document.createElement('li');
-                adminLink.className = 'nav-item';
-                adminLink.innerHTML = `
-                    <a href="/admin" class="nav-link">
-                        <span class="nav-icon">⚙️</span>
-                        Admin Panel
-                    </a>
-                `;
-                document.getElementById('sidebarNav').appendChild(adminLink);
+  const eb = document.getElementById('pExport');
+  eb.textContent = d.can_export ? 'Enabled' : 'Disabled';
+  eb.className   = `badge ${d.can_export ? 'badge-success' : 'badge-danger'}`;
 
-                // Also add groups link for admin
-                const groupsLink = document.createElement('li');
-                groupsLink.className = 'nav-item';
-                groupsLink.innerHTML = `
-                    <a href="/groups" class="nav-link">
-                        <span class="nav-icon">👥</span>
-                        Groups
-                    </a>
-                `;
-                document.getElementById('sidebarNav').appendChild(groupsLink);
-            }
+  // Permissions
+  const perms = await api(`/api/admin/users/${d.id}/permissions`);
+  const pb = document.getElementById('myPermsBody');
+  if (!perms || !perms.permissions.length) {
+    pb.innerHTML = `<p style="color:var(--text-muted)">
+      No individual permissions assigned.<br>Access may come through group membership.
+    </p>`;
+  } else {
+    pb.innerHTML = perms.permissions.map(p => `
+      <div class="perm-item">
+        <div>
+          <span class="badge badge-${p.resource_type}">${p.resource_type}</span>
+          <code style="margin-left:.5rem">${p.resource_name}</code>
+        </div>
+        <span class="badge badge-primary">${p.permission_level}</span>
+      </div>`).join('');
+  }
 
-            // Show export button if user has permission
-            if (currentUser.can_export || currentUser.role === 'admin') {
-                document.getElementById('exportBtn').style.display = 'inline-block';
-            }
+  // Groups (placeholder — needs /api/users/me/groups endpoint)
+  document.getElementById('myGroupsBody').innerHTML =
+    `<p style="color:var(--text-muted)">Group membership loading…</p>`;
+}
 
-            // Load initial data
-            loadStats();
-        }
+async function changePw() {
+  const cur = document.getElementById('pwCur').value;
+  const nw  = document.getElementById('pwNew').value;
+  const cf  = document.getElementById('pwCf').value;
 
-        // API call utility
-        async function apiCall(endpoint, options = {}) {
-            const response = await fetch(API_URL + endpoint, options);
-            
-            if (response.status === 401) {
-                sessionStorage.clear();
-                window.location.href = '/signin';
-                return null;
-            }
-            
-            return response.json();
-        }
+  if (nw !== cf) {
+    showAlert('Passwords do not match.', 'error', 'pwAlert'); return;
+  }
+  if (nw.length < 8) {
+    showAlert('New password must be at least 8 characters.', 'error', 'pwAlert'); return;
+  }
 
-        // Logout
-        document.getElementById('logoutBtn').addEventListener('click', async () => {
-            try {
-                await apiCall('/api/auth/logout', { method: 'POST' });
-            } catch (error) {
-                console.error('Logout error:', error);
-            }
-            
-            sessionStorage.clear();
-            window.location.href = '/signin';
-        });
+  const d = await api('/api/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ current_password: cur, new_password: nw })
+  });
 
-        // Export PDF
-        document.getElementById('exportBtn').addEventListener('click', async () => {
-            try {
-                const response = await fetch(`${API_URL}/api/export/pdf`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ type: 'full' })
-                });
+  if (d && d.success) {
+    showAlert('Password changed successfully.', 'success', 'pwAlert');
+    ['pwCur','pwNew','pwCf'].forEach(id => document.getElementById(id).value = '');
+  } else {
+    showAlert(d?.error || 'Failed to change password.', 'error', 'pwAlert');
+  }
+}
 
-                if (response.ok) {
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `data_dictionary_${Date.now()}.pdf`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-                } else {
-                    alert('Export failed. Please check your permissions.');
-                }
-            } catch (error) {
-                console.error('Export error:', error);
-                alert('Export failed. Please try again.');
-            }
-        });
-
-        // Load stats
-        async function loadStats() {
-            const data = await apiCall('/api/stats');
-            if (data) {
-                document.getElementById('statSchemas').textContent = data.schemas;
-                document.getElementById('statTables').textContent = data.tables;
-                document.getElementById('statColumns').textContent = data.columns;
-            }
-
-            // Load schema filter options
-            const schemasData = await apiCall('/api/schemas');
-            if (schemasData) {
-                const select = document.getElementById('schemaFilter');
-                schemasData.schemas.forEach(schema => {
-                    const option = document.createElement('option');
-                    option.value = schema.name;
-                    option.textContent = `${schema.name} (${schema.table_count} tables)`;
-                    select.appendChild(option);
-                });
-            }
-        }
-
-        // Search with debounce
-        let searchTimeout;
-        document.getElementById('searchInput').addEventListener('input', (e) => {
-            clearTimeout(searchTimeout);
-            const query = e.target.value.trim();
-            
-            if (query.length < 2) {
-                showEmptyState();
-                return;
-            }
-
-            searchTimeout = setTimeout(() => performSearch(query), 300);
-        });
-
-        // Filter change handlers
-        document.getElementById('schemaFilter').addEventListener('change', () => {
-            const query = document.getElementById('searchInput').value.trim();
-            if (query.length >= 2) {
-                performSearch(query);
-            }
-        });
-
-        document.getElementById('tableTypeFilter').addEventListener('change', () => {
-            const query = document.getElementById('searchInput').value.trim();
-            if (query.length >= 2) {
-                performSearch(query);
-            }
-        });
-
-        // Perform search
-        async function performSearch(query) {
-            document.getElementById('loading').classList.add('active');
-            document.getElementById('resultsContainer').style.display = 'none';
-            document.getElementById('emptyState').style.display = 'none';
-
-            const schema = document.getElementById('schemaFilter').value;
-            const tableType = document.getElementById('tableTypeFilter').value;
-
-            let url = `/api/search?q=${encodeURIComponent(query)}`;
-            if (schema) url += `&schema=${schema}`;
-            if (tableType) url += `&table_type=${tableType}`;
-
-            const data = await apiCall(url);
-            
-            document.getElementById('loading').classList.remove('active');
-
-            if (data && data.results) {
-                displayResults(data.results);
-            }
-        }
-
-        // Display results
-        function displayResults(results) {
-            const container = document.getElementById('resultsContainer');
-            const body = document.getElementById('resultsBody');
-            const count = document.getElementById('resultsCount');
-
-            if (results.length === 0) {
-                showEmptyState();
-                return;
-            }
-
-            count.textContent = `${results.length} result${results.length !== 1 ? 's' : ''}`;
-            body.innerHTML = '';
-
-            results.forEach(result => {
-                const item = document.createElement('div');
-                item.className = 'result-item';
-                
-                if (result.type === 'table') {
-                    item.innerHTML = `
-                        <span class="result-type">table</span>
-                        <div class="result-title">${result.table}</div>
-                        <div class="result-path">${result.schema}.${result.table}</div>
-                        ${result.description ? `<div class="result-description">${result.description}</div>` : ''}
-                        <div style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-secondary);">
-                            ${result.column_count} columns • ${result.meta.row_count || 0} rows
-                        </div>
-                    `;
-                    item.addEventListener('click', () => showTableDetails(result.schema, result.table));
-                } else {
-                    item.innerHTML = `
-                        <span class="result-type column">column</span>
-                        <div class="result-title">${result.column}</div>
-                        <div class="result-path">${result.schema}.${result.table}.${result.column}</div>
-                        <div style="margin-top: 0.5rem;">
-                            <span class="badge badge-primary">${result.data_type}</span>
-                        </div>
-                        ${result.description ? `<div class="result-description">${result.description}</div>` : ''}
-                    `;
-                    item.addEventListener('click', () => showTableDetails(result.schema, result.table));
-                }
-
-                body.appendChild(item);
-            });
-
-            container.style.display = 'block';
-        }
-
-        // Show empty state
-        function showEmptyState() {
-            document.getElementById('resultsContainer').style.display = 'none';
-            document.getElementById('emptyState').style.display = 'block';
-        }
-
-        // Show table details
-        async function showTableDetails(schema, table) {
-            const data = await apiCall(`/api/schemas/${schema}/tables/${table}`);
-            
-            if (!data) return;
-
-            const modal = document.getElementById('tableModal');
-            const title = document.getElementById('modalTitle');
-            const body = document.getElementById('modalBody');
-
-            title.textContent = `${schema}.${table}`;
-
-            body.innerHTML = `
-                <div class="table-info">
-                    <div class="info-row">
-                        <div class="info-label">Schema</div>
-                        <div class="info-value">${data.schema}</div>
-                    </div>
-                    <div class="info-row">
-                        <div class="info-label">Table Name</div>
-                        <div class="info-value">${data.table}</div>
-                    </div>
-                    ${data.description ? `
-                    <div class="info-row">
-                        <div class="info-label">Description</div>
-                        <div class="info-value">${data.description}</div>
-                    </div>
-                    ` : ''}
-                    <div class="info-row">
-                        <div class="info-label">Rows</div>
-                        <div class="info-value">${data.meta.row_count || 'Unknown'}</div>
-                    </div>
-                </div>
-
-                <h3 style="margin-bottom: 1rem;">Columns (${data.columns.length})</h3>
-                <table class="columns-table">
-                    <thead>
-                        <tr>
-                            <th>Column</th>
-                            <th>Type</th>
-                            <th>Nullable</th>
-                            <th>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${data.columns.map(col => `
-                            <tr>
-                                <td>
-                                    <strong>${col.name}</strong>
-                                    ${col.meta?.is_primary_key ? '<span class="badge badge-warning">PK</span>' : ''}
-                                    ${col.meta?.is_foreign_key ? '<span class="badge badge-success">FK</span>' : ''}
-                                </td>
-                                <td><code>${col.data_type}</code></td>
-                                <td>${col.meta?.is_nullable !== false ? 'Yes' : 'No'}</td>
-                                <td>${col.description || '-'}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            `;
-
-            modal.classList.add('active');
-        }
-
-        // Close modal
-        document.getElementById('modalClose').addEventListener('click', () => {
-            document.getElementById('tableModal').classList.remove('active');
-        });
-
-        // Click outside modal to close
-        document.getElementById('tableModal').addEventListener('click', (e) => {
-            if (e.target.id === 'tableModal') {
-                document.getElementById('tableModal').classList.remove('active');
-            }
-        });
-    </script>
+/* ── Export PDF ─────────────────────────────────────────────── */
+async function exportPDF() {
+  showAlert('Generating PDF…', 'info');
+  try {
+    const r = await fetch('/api/export/pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'full' })
+    });
+    if (!r.ok) {
+      showAlert('Export failed. Check your permissions.', 'error'); return;
+    }
+    const blob = await r.blob();
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = `data_dictionary_${Date.now()}.pdf`;
+    a.click();
+    showAlert('PDF downloaded.', 'success');
+  } catch {
+    showAlert('Export failed — please try again.', 'error');
+  }
+}
+</script>
 </body>
 </html>

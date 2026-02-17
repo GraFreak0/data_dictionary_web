@@ -1,442 +1,127 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sign Up - Data Dictionary</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem;
-        }
-
-        .signup-container {
-            background: white;
-            padding: 2.5rem;
-            border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-            width: 100%;
-            max-width: 450px;
-        }
-
-        .logo {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-
-        .logo-icon {
-            font-size: 3rem;
-            margin-bottom: 0.5rem;
-        }
-
-        h1 {
-            font-size: 1.875rem;
-            font-weight: 700;
-            margin-bottom: 0.5rem;
-            color: #111827;
-            text-align: center;
-        }
-
-        .subtitle {
-            color: #6b7280;
-            margin-bottom: 2rem;
-            text-align: center;
-        }
-
-        .form-group {
-            margin-bottom: 1.25rem;
-        }
-
-        .form-label {
-            display: block;
-            font-size: 0.875rem;
-            font-weight: 500;
-            margin-bottom: 0.5rem;
-            color: #374151;
-        }
-
-        .form-input {
-            width: 100%;
-            padding: 0.75rem;
-            border: 1px solid #d1d5db;
-            border-radius: 6px;
-            font-size: 1rem;
-            transition: all 0.2s;
-        }
-
-        .form-input:focus {
-            outline: none;
-            border-color: #2563eb;
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-        }
-
-        .form-input.error {
-            border-color: #ef4444;
-        }
-
-        .helper-text {
-            font-size: 0.75rem;
-            color: #6b7280;
-            margin-top: 0.25rem;
-        }
-
-        .helper-text.error {
-            color: #ef4444;
-        }
-
-        .password-strength {
-            margin-top: 0.5rem;
-            height: 4px;
-            background: #e5e7eb;
-            border-radius: 2px;
-            overflow: hidden;
-        }
-
-        .password-strength-bar {
-            height: 100%;
-            width: 0%;
-            transition: all 0.3s;
-            border-radius: 2px;
-        }
-
-        .password-strength-bar.weak {
-            width: 33%;
-            background: #ef4444;
-        }
-
-        .password-strength-bar.medium {
-            width: 66%;
-            background: #f59e0b;
-        }
-
-        .password-strength-bar.strong {
-            width: 100%;
-            background: #10b981;
-        }
-
-        .btn {
-            width: 100%;
-            padding: 0.75rem;
-            border: none;
-            border-radius: 6px;
-            font-size: 1rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-            margin-top: 0.5rem;
-        }
-
-        .btn-primary {
-            background: #2563eb;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #1e40af;
-        }
-
-        .btn-primary:disabled {
-            background: #9ca3af;
-            cursor: not-allowed;
-        }
-
-        .alert {
-            padding: 0.75rem 1rem;
-            border-radius: 6px;
-            margin-bottom: 1rem;
-            display: none;
-        }
-
-        .alert-error {
-            background: #fee2e2;
-            color: #991b1b;
-            border: 1px solid #fecaca;
-        }
-
-        .alert-success {
-            background: #d1fae5;
-            color: #065f46;
-            border: 1px solid #6ee7b7;
-        }
-
-        .footer-links {
-            text-align: center;
-            margin-top: 1.5rem;
-            font-size: 0.875rem;
-            color: #6b7280;
-        }
-
-        .footer-links a {
-            color: #2563eb;
-            text-decoration: none;
-            font-weight: 500;
-        }
-
-        .footer-links a:hover {
-            text-decoration: underline;
-        }
-
-        .requirements {
-            background: #f9fafb;
-            padding: 1rem;
-            border-radius: 6px;
-            margin-top: 0.5rem;
-        }
-
-        .requirements h4 {
-            font-size: 0.875rem;
-            color: #374151;
-            margin-bottom: 0.5rem;
-        }
-
-        .requirements ul {
-            list-style: none;
-            padding: 0;
-        }
-
-        .requirements li {
-            font-size: 0.8125rem;
-            color: #6b7280;
-            padding: 0.25rem 0;
-        }
-
-        .requirements li::before {
-            content: '○ ';
-            color: #d1d5db;
-        }
-
-        .requirements li.valid::before {
-            content: '✓ ';
-            color: #10b981;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign Up – Data Dictionary</title>
+  <link rel="stylesheet" href="/static/styles/main.css">
+  <script>(function(){const t=localStorage.getItem('theme')||'light';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
-    <div class="signup-container">
-        <div class="logo">
-            <div class="logo-icon">📚</div>
-            <h1>Create Account</h1>
-            <p class="subtitle">Join the Data Dictionary</p>
-        </div>
-
-        <div id="signupAlert" class="alert alert-error"></div>
-        <div id="successAlert" class="alert alert-success"></div>
-
-        <form id="signupForm">
-            <div class="form-group">
-                <label class="form-label">Username</label>
-                <input type="text" class="form-input" id="username" required 
-                       minlength="3" maxlength="30" autocomplete="username">
-                <div class="helper-text">At least 3 characters</div>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">Email</label>
-                <input type="email" class="form-input" id="email" required autocomplete="email">
-                <div class="helper-text">We'll never share your email</div>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">Password</label>
-                <input type="password" class="form-input" id="password" required 
-                       minlength="8" autocomplete="new-password">
-                <div class="password-strength">
-                    <div class="password-strength-bar" id="strengthBar"></div>
-                </div>
-                <div class="requirements">
-                    <h4>Password must contain:</h4>
-                    <ul id="passwordRequirements">
-                        <li id="req-length">At least 8 characters</li>
-                        <li id="req-uppercase">One uppercase letter</li>
-                        <li id="req-lowercase">One lowercase letter</li>
-                        <li id="req-number">One number</li>
-                    </ul>
-                </div>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">Confirm Password</label>
-                <input type="password" class="form-input" id="confirmPassword" required 
-                       autocomplete="new-password">
-                <div class="helper-text" id="confirmHelper">Passwords must match</div>
-            </div>
-
-            <button type="submit" class="btn btn-primary" id="submitBtn">
-                Create Account
-            </button>
-        </form>
-
-        <div class="footer-links">
-            Already have an account? <a href="/signin">Sign in</a>
-        </div>
+<div class="auth-page">
+  <div class="auth-card" style="max-width:460px">
+    <div class="auth-logo">
+      <div class="auth-logo-icon">📚</div>
+      <h1>Create Account</h1>
+      <p>Join the Data Dictionary</p>
     </div>
 
-    <script>
-        const API_URL = '';
+    <div id="globalAlert" class="alert"></div>
 
-        // Password validation
-        const passwordInput = document.getElementById('password');
-        const confirmInput = document.getElementById('confirmPassword');
-        const strengthBar = document.getElementById('strengthBar');
-        const submitBtn = document.getElementById('submitBtn');
+    <form id="signupForm" novalidate>
+      <div class="form-group">
+        <label class="form-label" for="uname">Username</label>
+        <input class="form-input" type="text" id="uname" required minlength="3" maxlength="30" autocomplete="username" placeholder="At least 3 characters">
+        <div class="form-helper">At least 3 characters, letters and numbers only</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="email">Email</label>
+        <input class="form-input" type="email" id="email" required autocomplete="email" placeholder="you@example.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="pw">Password</label>
+        <input class="form-input" type="password" id="pw" required minlength="8" autocomplete="new-password" placeholder="Min 8 characters">
+        <div class="pw-bar-wrap"><div class="pw-bar" id="pwBar"></div></div>
+        <div class="pw-reqs">
+          <h4>Password must contain:</h4>
+          <ul>
+            <li id="req-len">At least 8 characters</li>
+            <li id="req-upper">One uppercase letter (A–Z)</li>
+            <li id="req-lower">One lowercase letter (a–z)</li>
+            <li id="req-num">One number (0–9)</li>
+          </ul>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="pw2">Confirm Password</label>
+        <input class="form-input" type="password" id="pw2" required autocomplete="new-password" placeholder="Re-enter password">
+        <div class="form-helper" id="matchHelper">Must match the password above</div>
+      </div>
+      <button type="submit" class="btn btn-primary btn-full" id="submitBtn" style="margin-top:.25rem">Create Account</button>
+    </form>
 
-        passwordInput.addEventListener('input', () => {
-            const password = passwordInput.value;
-            validatePassword(password);
-            checkPasswordMatch();
-        });
+    <div class="auth-footer">Already have an account? <a href="/signin">Sign in</a></div>
+  </div>
+</div>
 
-        confirmInput.addEventListener('input', checkPasswordMatch);
+<script src="/static/scripts/app.js"></script>
+<script>
+  const pwEl  = document.getElementById('pw');
+  const pw2El = document.getElementById('pw2');
+  const pwBar = document.getElementById('pwBar');
 
-        function validatePassword(password) {
-            const requirements = {
-                length: password.length >= 8,
-                uppercase: /[A-Z]/.test(password),
-                lowercase: /[a-z]/.test(password),
-                number: /[0-9]/.test(password)
-            };
+  pwEl.addEventListener('input',  () => { checkPw(pwEl.value); checkMatch(); });
+  pw2El.addEventListener('input', checkMatch);
 
-            // Update requirement indicators
-            document.getElementById('req-length').className = requirements.length ? 'valid' : '';
-            document.getElementById('req-uppercase').className = requirements.uppercase ? 'valid' : '';
-            document.getElementById('req-lowercase').className = requirements.lowercase ? 'valid' : '';
-            document.getElementById('req-number').className = requirements.number ? 'valid' : '';
+  function checkPw(p) {
+    const r = { len: p.length >= 8, upper: /[A-Z]/.test(p), lower: /[a-z]/.test(p), num: /[0-9]/.test(p) };
+    ['len','upper','lower','num'].forEach(k => {
+      const el = document.getElementById('req-' + k);
+      if (el) el.className = r[k] ? 'ok' : '';
+    });
+    const n = Object.values(r).filter(Boolean).length;
+    pwBar.className = 'pw-bar ' + (n <= 2 ? 'weak' : n === 3 ? 'medium' : 'strong');
+    return Object.values(r).every(Boolean);
+  }
 
-            // Calculate strength
-            const validCount = Object.values(requirements).filter(v => v).length;
-            strengthBar.className = 'password-strength-bar';
-            
-            if (validCount <= 2) {
-                strengthBar.classList.add('weak');
-            } else if (validCount === 3) {
-                strengthBar.classList.add('medium');
-            } else if (validCount === 4) {
-                strengthBar.classList.add('strong');
-            }
+  function checkMatch() {
+    const h = document.getElementById('matchHelper');
+    if (!pw2El.value) { pw2El.classList.remove('is-error'); h.className='form-helper'; h.textContent='Must match the password above'; return; }
+    if (pwEl.value === pw2El.value) {
+      pw2El.classList.remove('is-error'); h.className='form-helper'; h.textContent='✓ Passwords match';
+    } else {
+      pw2El.classList.add('is-error'); h.className='form-helper is-error'; h.textContent='Passwords do not match';
+    }
+  }
 
-            return Object.values(requirements).every(v => v);
-        }
+  document.getElementById('signupForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const username = document.getElementById('uname').value.trim();
+    const email    = document.getElementById('email').value.trim();
+    const password = pwEl.value;
+    const confirm  = pw2El.value;
 
-        function checkPasswordMatch() {
-            const password = passwordInput.value;
-            const confirm = confirmInput.value;
-            const helper = document.getElementById('confirmHelper');
+    if (username.length < 3)     { showAlert('Username must be at least 3 characters.', 'error'); return; }
+    if (!checkPw(password))      { showAlert('Password does not meet all requirements.', 'error'); return; }
+    if (password !== confirm)    { showAlert('Passwords do not match.', 'error'); return; }
 
-            if (confirm.length > 0) {
-                if (password === confirm) {
-                    confirmInput.classList.remove('error');
-                    helper.className = 'helper-text';
-                    helper.textContent = 'Passwords match ✓';
-                } else {
-                    confirmInput.classList.add('error');
-                    helper.className = 'helper-text error';
-                    helper.textContent = 'Passwords do not match';
-                }
-            }
-        }
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true; btn.textContent = 'Creating account…';
 
-        // Form submission
-        document.getElementById('signupForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
+    try {
+      const r = await fetch('/api/auth/signup', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, email, password })
+      });
+      const d = await r.json();
+      if (r.ok && d.success) {
+        showAlert('Account created! Redirecting to sign in…', 'success');
+        document.getElementById('signupForm').reset();
+        pwBar.className = 'pw-bar';
+        setTimeout(() => window.location.href = '/signin', 2000);
+      } else {
+        showAlert(d.error || 'Failed to create account.', 'error');
+        btn.disabled = false; btn.textContent = 'Create Account';
+      }
+    } catch {
+      showAlert('Connection error — please try again.', 'error');
+      btn.disabled = false; btn.textContent = 'Create Account';
+    }
+  });
 
-            const username = document.getElementById('username').value.trim();
-            const email = document.getElementById('email').value.trim();
-            const password = passwordInput.value;
-            const confirmPassword = confirmInput.value;
-
-            // Validate
-            if (!validatePassword(password)) {
-                showError('Password does not meet requirements');
-                return;
-            }
-
-            if (password !== confirmPassword) {
-                showError('Passwords do not match');
-                return;
-            }
-
-            if (username.length < 3) {
-                showError('Username must be at least 3 characters');
-                return;
-            }
-
-            // Disable submit button
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Creating Account...';
-
-            try {
-                const response = await fetch(`${API_URL}/api/auth/signup`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ username, email, password })
-                });
-
-                const data = await response.json();
-
-                if (response.ok && data.success) {
-                    showSuccess('Account created successfully! Redirecting to sign in...');
-                    
-                    // Clear form
-                    document.getElementById('signupForm').reset();
-                    strengthBar.className = 'password-strength-bar';
-                    
-                    // Redirect after 2 seconds
-                    setTimeout(() => {
-                        window.location.href = '/signin';
-                    }, 2000);
-                } else {
-                    showError(data.error || 'Failed to create account');
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = 'Create Account';
-                }
-            } catch (error) {
-                showError('Connection error. Please try again.');
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Create Account';
-            }
-        });
-
-        function showError(message) {
-            const errorDiv = document.getElementById('signupAlert');
-            const successDiv = document.getElementById('successAlert');
-            
-            successDiv.style.display = 'none';
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
-
-            setTimeout(() => {
-                errorDiv.style.display = 'none';
-            }, 5000);
-        }
-
-        function showSuccess(message) {
-            const errorDiv = document.getElementById('signupAlert');
-            const successDiv = document.getElementById('successAlert');
-            
-            errorDiv.style.display = 'none';
-            successDiv.textContent = message;
-            successDiv.style.display = 'block';
-        }
-
-        // Clear alerts on input
-        document.querySelectorAll('.form-input').forEach(input => {
-            input.addEventListener('input', () => {
-                document.getElementById('signupAlert').style.display = 'none';
-            });
-        });
-    </script>
+  document.querySelectorAll('.form-input').forEach(inp =>
+    inp.addEventListener('input', () => document.getElementById('globalAlert').classList.remove('show'))
+  );
+</script>
 </body>
 </html>
