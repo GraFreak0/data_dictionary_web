@@ -6,7 +6,6 @@
 
 /* ── 1. Theme ──────────────────────────────────────────────────
    Apply before DOMContentLoaded to prevent flash of wrong theme.
-   Call toggleTheme() from sidebar button.
    ──────────────────────────────────────────────────────────── */
 (function applyStoredTheme() {
   const saved = localStorage.getItem('theme') || 'light';
@@ -76,14 +75,17 @@ function showAlert(message, type = 'success', targetId = 'globalAlert') {
 }
 
 /* ── 4. Sidebar init ───────────────────────────────────────────
-   Call initSidebar() once user is confirmed logged in.
-   Fills avatar / name / role, shows admin nav items if admin.
-   Also fills footer user info.
+   Call initSidebar(user) once the user is confirmed logged in.
+   - Fills avatar / name / role in the sidebar user card
+   - Fills footer user info
+   - Reveals ALL .admin-only nav items if user.role === 'admin'
+   - Highlights the active nav link based on current URL
+   - Shows the export button if user.can_export or user is admin
    ──────────────────────────────────────────────────────────── */
 function initSidebar(user) {
   if (!user) { window.location.href = '/signin'; return; }
 
-  // Avatar / name / role
+  // Fill user card
   const avatar = document.getElementById('userAvatar');
   const name   = document.getElementById('userName');
   const role   = document.getElementById('userRole');
@@ -91,15 +93,47 @@ function initSidebar(user) {
 
   if (avatar) avatar.textContent = user.username[0].toUpperCase();
   if (name)   name.textContent   = user.username;
-  if (role)   role.textContent   = user.role;
+  if (role) {
+    role.textContent  = user.role;
+    role.className    = 'user-role';   // reset, then colour by role
+    if (user.role === 'admin')       role.style.color = 'var(--primary)';
+    else if (user.role === 'contributor') role.style.color = 'var(--secondary)';
+  }
   if (footer) footer.textContent = `${user.username} · ${user.role}`;
 
-  // Show admin-only nav items
+  // ── Reveal admin-only nav items for admins ──────────────────
   if (user.role === 'admin') {
-    document.querySelectorAll('.admin-only').forEach(el => el.style.display = '');
+    document.querySelectorAll('.admin-only').forEach(el => {
+      el.style.display = '';
+      el.removeAttribute('aria-hidden');
+    });
   }
 
-  // Show export button if user has permission
+  // ── Highlight active nav link from current URL ──────────────
+  // Works for both full-page routes (/admin, /groups, /profile)
+  // and the SPA hash routes (/#search, /#browse, etc.)
+  const currentPath = window.location.pathname;
+  const currentHash = window.location.hash; // e.g. '#users'
+
+  document.querySelectorAll('.sidebar-nav .nav-link').forEach(link => {
+    const href     = (link.getAttribute('href') || '').trim();
+    const linkPath = href.split('#')[0];   // e.g. /admin
+    const linkHash = href.includes('#') ? '#' + href.split('#')[1] : '';
+
+    let active = false;
+
+    if (linkPath && linkPath !== '/' && currentPath === linkPath) {
+      // Exact path match — also match hash if present (e.g. /admin#users)
+      active = !linkHash || linkHash === currentHash;
+    } else if (linkPath === '/' && currentPath === '/') {
+      active = true;
+    }
+
+    if (active) link.classList.add('active');
+    else link.classList.remove('active');
+  });
+
+  // ── Show export button ──────────────────────────────────────
   const exportBtn = document.getElementById('exportBtn');
   if (exportBtn && (user.can_export || user.role === 'admin')) {
     exportBtn.style.display = 'inline-flex';
@@ -117,7 +151,7 @@ async function logout() {
 
 /* ── 6. Modal helpers ──────────────────────────────────────────
    openModal(id)  / closeModal(id)
-   Click outside backdrop to close.
+   Click outside (on backdrop) to close.
    ──────────────────────────────────────────────────────────── */
 function openModal(id) {
   const el = document.getElementById(id);
@@ -138,7 +172,6 @@ document.addEventListener('click', e => {
 /* ── 7. Tab helpers ────────────────────────────────────────────
    switchTab(clickedBtn, panelId, scopeSelector)
    scopeSelector: CSS selector for the container that holds tabs+panels
-   (defaults to closest .modal-box or .tab-scope)
    ──────────────────────────────────────────────────────────── */
 function switchTab(btn, panelId, scopeSelector) {
   const scope = scopeSelector
