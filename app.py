@@ -148,7 +148,7 @@ SECRET_KEY, JWT_SECRET_KEY = load_or_generate_keys()
 
 app.config['SECRET_KEY'] = SECRET_KEY
 app.config['JWT_SECRET_KEY'] = JWT_SECRET_KEY
-app.config['YAML_DIRECTORY'] = os.getenv('YAML_DIRECTORY', './dbt_models')
+app.config['YAML_DIRECTORY'] = os.getenv('YAML_DIRECTORY', './models')
 app.config['DATABASE'] = os.getenv('DATABASE', './data_dictionary.db')
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
@@ -1397,4 +1397,4 @@ def logout_page():
 
 if __name__ == '__main__':
     init_db()
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5001)
