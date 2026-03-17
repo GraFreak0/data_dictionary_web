@@ -3,7 +3,7 @@ Data Dictionary Web UI - Flask Backend with RBAC
 ENHANCED VERSION with User Groups, PDF Export, and Complete Features
 """
 
-from flask import Flask, request, jsonify, session, render_template, send_file
+from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -1343,53 +1343,20 @@ def revoke_permission(permission_id):
 
 
 # ============================================================================
-# HTML Page Routes
+# React SPA Routes — serve the built frontend for all non-API paths
 # ============================================================================
 
-@app.route('/')
-def index():
-    """Serve the main application page (requires login)."""
-    return render_template('index.html')
+REACT_BUILD_DIR = os.path.join(os.path.dirname(__file__), 'static', 'dist')
 
 
-@app.route('/signin')
-def signin_page():
-    """Serve the signin page."""
-    return render_template('signin.html')
-
-
-@app.route('/signup')
-def signup_page():
-    """Serve the signup page."""
-    return render_template('signup.html')
-
-
-@app.route('/admin')
-def admin_panel():
-    """Serve the admin panel page (admin only)."""
-    # Note: Access control is done in JavaScript on page load
-    # Backend validation happens in API endpoints
-    return render_template('admin.html')
-
-
-@app.route('/profile')
-def profile():
-    """Serve the user profile page."""
-    return render_template('profile.html')
-
-
-@app.route('/groups')
-def groups_page():
-    """Serve the groups management page (admin only)."""
-    return render_template('groups.html')
-
-
-# Add logout endpoint if not already present
-@app.route('/logout')
-def logout_page():
-    """Logout and redirect to signin."""
-    logout_user()
-    return redirect('/signin')
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_react(path: str):
+    """Serve the React SPA. Static assets are served directly; all other
+    paths fall back to index.html so React Router handles client-side routing."""
+    if path and os.path.exists(os.path.join(REACT_BUILD_DIR, path)):
+        return send_from_directory(REACT_BUILD_DIR, path)
+    return send_from_directory(REACT_BUILD_DIR, 'index.html')
 
 # ============================================================================
 # Main
@@ -1397,4 +1364,4 @@ def logout_page():
 
 if __name__ == '__main__':
     init_db()
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    app.run(debug=True, host='0.0.0.0', port=5002)
