@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { Eye, EyeOff, BookOpen, Lock, User, Shield, LayoutDashboard } from 'lucide-react'
+import { Eye, EyeOff, BookOpen, Lock, User, Shield, LayoutDashboard, Clock } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { Input } from '../components/ui/Input'
 import toast from 'react-hot-toast'
@@ -19,8 +19,10 @@ export function SignIn() {
   // Track which submit button was clicked so we know where to navigate
   const [pendingDest, setPendingDest] = useState<LoginDest | null>(null)
 
+  const locationState = location.state as { from?: { pathname: string }; reason?: string } | null
   // Restore the page the user was trying to reach before being redirected
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/'
+  const from = locationState?.from?.pathname || '/'
+  const timedOut = locationState?.reason === 'inactivity'
 
   const validate = () => {
     const e: typeof errors = {}
@@ -78,6 +80,16 @@ export function SignIn() {
           <h1 className="text-2xl font-bold text-[var(--text-primary)]">Data Dictionary</h1>
           <p className="mt-1 text-sm text-[var(--text-muted)]">Sign in to your account</p>
         </div>
+
+        {/* Session timeout banner */}
+        {timedOut && (
+          <div className="mb-4 flex items-center gap-3 rounded-xl border border-amber-400/40 bg-amber-50/80 px-4 py-3 dark:bg-amber-900/20">
+            <Clock size={16} className="shrink-0 text-amber-500" />
+            <p className="text-sm text-amber-700 dark:text-amber-400">
+              You were signed out due to 10 minutes of inactivity.
+            </p>
+          </div>
+        )}
 
         {/* Card */}
         <div className="card space-y-5">
