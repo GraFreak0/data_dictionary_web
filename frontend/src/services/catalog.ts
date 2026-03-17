@@ -3,8 +3,15 @@ import type { Schema, Table, SearchResult, Stats, ExportFormat } from '../types'
 
 export const catalogService = {
   async getStats(): Promise<Stats> {
-    const response = await api.get<Stats>('/api/stats')
-    return response.data
+    const response = await api.get<{ schemas: number; tables: number; columns: number }>(
+      '/api/stats'
+    )
+    // Backend returns { schemas, tables, columns } — map to our Stats type
+    return {
+      total_databases: response.data.schemas,
+      total_tables: response.data.tables,
+      total_columns: response.data.columns,
+    }
   },
 
   async search(
@@ -16,21 +23,28 @@ export const catalogService = {
     if (query) params.set('q', query)
     if (schema) params.set('schema', schema)
     if (type) params.set('type', type)
-    const response = await api.get<{ results: SearchResult[] }>(`/api/search?${params.toString()}`)
-    return response.data
+    const response = await api.get<{ results: SearchResult[]; count: number; query: string }>(
+      `/api/search?${params.toString()}`
+    )
+    return { results: response.data.results ?? [] }
   },
 
   async getSchemas(): Promise<Schema[]> {
-    const response = await api.get<Schema[]>('/api/schemas')
-    return response.data
+    // Backend returns { schemas: [...] }
+    const response = await api.get<{ schemas: Schema[] }>('/api/schemas')
+    return response.data.schemas ?? []
   },
 
   async getSchemaTables(schemaName: string): Promise<Table[]> {
-    const response = await api.get<Table[]>(`/api/schemas/${encodeURIComponent(schemaName)}/tables`)
-    return response.data
+    // Backend returns { schema, tables: [...] }
+    const response = await api.get<{ schema: string; tables: Table[] }>(
+      `/api/schemas/${encodeURIComponent(schemaName)}/tables`
+    )
+    return response.data.tables ?? []
   },
 
   async getTableDetail(schemaName: string, tableName: string): Promise<Table> {
+    // Backend returns the table object directly
     const response = await api.get<Table>(
       `/api/schemas/${encodeURIComponent(schemaName)}/tables/${encodeURIComponent(tableName)}`
     )
@@ -39,8 +53,18 @@ export const catalogService = {
 
   // Export
   async getExportFormats(): Promise<ExportFormat[]> {
-    const response = await api.get<ExportFormat[]>('/api/export/formats')
-    return response.data
+    // Backend returns a raw array: [{ name, label, extension }]
+    // 'name' is the format identifier; 'label' is the human-readable display name.
+    const response = await api.get<Array<{ name: string; label: string; extension: string }>>(
+      '/api/export/formats'
+    )
+    const raw = Array.isArray(response.data) ? response.data : []
+    return raw.map((f) => ({
+      id: f.name,          // used as the POST format key
+      name: f.label,       // display label in the UI
+      extension: f.extension,
+      mime_type: '',
+    }))
   },
 
   async checkExportPermission(): Promise<{ can_export: boolean }> {
@@ -55,7 +79,7 @@ export const catalogService = {
     const response = await api.post(`/api/export/${format}`, payload, {
       responseType: 'blob',
     })
-    return response.data
+    return response.data as Blob
   },
 
   downloadBlob(blob: Blob, filename: string): void {

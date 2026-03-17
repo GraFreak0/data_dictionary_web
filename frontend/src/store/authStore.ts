@@ -2,6 +2,10 @@ import { create } from 'zustand'
 import { authService } from '../services/auth'
 import type { User } from '../types'
 
+// Module-level flag — set SYNCHRONOUSLY before any async work so concurrent
+// calls (React StrictMode double-invoke, HMR, etc.) can never race.
+let _initStarted = false
+
 interface AuthState {
   user: User | null
   token: string | null
@@ -9,13 +13,12 @@ interface AuthState {
   isLoading: boolean
   isInitialized: boolean
 
-  // Actions
   initialize: () => Promise<void>
   login: (username: string, password: string) => Promise<User>
   signup: (username: string, email: string, password: string) => Promise<void>
   logout: () => void
   clearAuth: () => void
-  updateUser: (user: Partial<User>) => void
+  updateUser: (updates: Partial<User>) => void
   setLoading: (loading: boolean) => void
 }
 
@@ -27,8 +30,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isInitialized: false,
 
   initialize: async () => {
-    // Guard: only run once (protects against React StrictMode double-invoke)
-    if (get().isInitialized) return
+    // Synchronous guard — prevents any second call from running,
+    // regardless of timing (StrictMode, HMR, concurrent renders).
+    if (_initStarted) return
+    _initStarted = true
 
     const token = authService.getStoredToken()
     if (!token) {
@@ -42,6 +47,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       authService.saveUser(user)
       set({ user, token, isAuthenticated: true, isLoading: false, isInitialized: true })
     } catch {
+      // Token was invalid or server unreachable — clear and proceed as guest.
       authService.clearAuth()
       set({ user: null, token: null, isAuthenticated: false, isLoading: false, isInitialized: true })
     }
@@ -73,11 +79,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: () => {
+    // Fire-and-forget the API call — clear state immediately so the UI
+    // responds without waiting for the server.
     authService.logout().catch(() => {})
     set({ user: null, token: null, isAuthenticated: false, isLoading: false })
   },
 
-  // Called by the API interceptor on 401 — synchronous, no async
+  // Called by the Axios 401 interceptor — synchronous, no async.
+  // isInitialized is intentionally NOT reset so ProtectedRoute redirects
+  // cleanly via React Router instead of flashing the loading screen.
   clearAuth: () => {
     authService.clearAuth()
     set({ user: null, token: null, isAuthenticated: false, isLoading: false })

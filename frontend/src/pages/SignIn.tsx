@@ -1,10 +1,12 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { Eye, EyeOff, BookOpen, Lock, User, Shield } from 'lucide-react'
+import { Eye, EyeOff, BookOpen, Lock, User, Shield, LayoutDashboard } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
-import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import toast from 'react-hot-toast'
+
+// Which button the user clicked
+type LoginDest = 'dashboard' | 'admin'
 
 export function SignIn() {
   const navigate = useNavigate()
@@ -14,8 +16,10 @@ export function SignIn() {
   const [form, setForm] = useState({ username: '', password: '' })
   const [showPassword, setShowPassword] = useState(false)
   const [errors, setErrors] = useState<{ username?: string; password?: string }>({})
+  // Track which submit button was clicked so we know where to navigate
+  const [pendingDest, setPendingDest] = useState<LoginDest | null>(null)
 
-  // Where to go after login for non-admins (e.g. when redirected from a protected page)
+  // Restore the page the user was trying to reach before being redirected
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/'
 
   const validate = () => {
@@ -26,27 +30,36 @@ export function SignIn() {
     return Object.keys(e).length === 0
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = async (dest: LoginDest) => {
     if (!validate()) return
+    setPendingDest(dest)
 
     try {
       const user = await login(form.username.trim(), form.password)
-      toast.success(`Welcome back, ${user.username}!`)
 
-      // Admins always land on the admin panel
-      if (user.role === 'admin') {
+      if (dest === 'admin') {
+        if (user.role !== 'admin') {
+          toast.error('Admin access is required to sign in as admin.')
+          return
+        }
+        toast.success(`Welcome, ${user.username}! Redirecting to Admin panel…`)
         navigate('/admin', { replace: true })
       } else {
-        navigate(from === '/admin' || from === '/groups' ? '/' : from, { replace: true })
+        toast.success(`Welcome back, ${user.username}!`)
+        // If the user was redirected from an admin-only page, fall back to '/'
+        const safeDest = from === '/admin' || from === '/groups' ? '/' : from
+        navigate(safeDest, { replace: true })
       }
     } catch (err: unknown) {
       const error = err as { message?: string }
-      const msg = error?.message || 'Invalid username or password'
-      toast.error(msg)
+      toast.error(error?.message || 'Invalid username or password')
       setErrors({ password: 'Invalid credentials' })
+    } finally {
+      setPendingDest(null)
     }
   }
+
+  const loading = isLoading || pendingDest !== null
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--bg-secondary)] px-4">
@@ -67,8 +80,9 @@ export function SignIn() {
         </div>
 
         {/* Card */}
-        <div className="card">
-          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+        <div className="card space-y-5">
+          {/* Fields */}
+          <div className="space-y-4">
             <Input
               label="Username"
               name="username"
@@ -109,31 +123,83 @@ export function SignIn() {
               }
               autoComplete="current-password"
             />
-
-            <Button type="submit" fullWidth loading={isLoading} size="lg" className="mt-6">
-              {isLoading ? 'Signing in...' : 'Sign In'}
-            </Button>
-          </form>
-
-          {/* Admin hint */}
-          <div className="mt-4 flex items-center gap-2 rounded-lg bg-purple-50 px-3 py-2.5 dark:bg-purple-900/20">
-            <Shield size={14} className="shrink-0 text-purple-500" />
-            <p className="text-xs text-purple-700 dark:text-purple-300">
-              Admin accounts are automatically redirected to the Admin panel after sign in.
-            </p>
           </div>
 
-          <div className="mt-5 text-center">
-            <p className="text-sm text-[var(--text-muted)]">
-              Don't have an account?{' '}
-              <Link
-                to="/signup"
-                className="font-medium text-primary-500 hover:text-primary-400 transition-colors"
-              >
-                Sign up
-              </Link>
-            </p>
+          {/* Divider */}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-[var(--border-color)]" />
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="bg-[var(--card-bg)] px-2 text-[var(--text-muted)]">
+                choose sign-in destination
+              </span>
+            </div>
           </div>
+
+          {/* Two sign-in buttons */}
+          <div className="grid grid-cols-2 gap-3">
+            {/* Normal sign in — always goes to Dashboard */}
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => handleSubmit('dashboard')}
+              className={`flex flex-col items-center gap-2 rounded-xl border-2 px-3 py-4 text-center transition-all focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2
+                ${loading && pendingDest === 'dashboard'
+                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 opacity-80'
+                  : 'border-[var(--border-color)] hover:border-primary-400 hover:bg-primary-50/50 dark:hover:bg-primary-900/10'
+                }
+                disabled:opacity-60 disabled:cursor-not-allowed`}
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-100 dark:bg-primary-900/40">
+                {loading && pendingDest === 'dashboard' ? (
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-600 border-t-transparent" />
+                ) : (
+                  <LayoutDashboard size={18} className="text-primary-600 dark:text-primary-400" />
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[var(--text-primary)]">Sign In</p>
+                <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Go to Dashboard</p>
+              </div>
+            </button>
+
+            {/* Admin sign in — goes to Admin panel (admins only) */}
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => handleSubmit('admin')}
+              className={`flex flex-col items-center gap-2 rounded-xl border-2 px-3 py-4 text-center transition-all focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2
+                ${loading && pendingDest === 'admin'
+                  ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 opacity-80'
+                  : 'border-[var(--border-color)] hover:border-purple-400 hover:bg-purple-50/50 dark:hover:bg-purple-900/10'
+                }
+                disabled:opacity-60 disabled:cursor-not-allowed`}
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/40">
+                {loading && pendingDest === 'admin' ? (
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-purple-600 border-t-transparent" />
+                ) : (
+                  <Shield size={18} className="text-purple-600 dark:text-purple-400" />
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[var(--text-primary)]">Sign In as Admin</p>
+                <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Go to Admin Panel</p>
+              </div>
+            </button>
+          </div>
+
+          {/* Sign up link */}
+          <p className="text-center text-sm text-[var(--text-muted)]">
+            Don't have an account?{' '}
+            <Link
+              to="/signup"
+              className="font-medium text-primary-500 hover:text-primary-400 transition-colors"
+            >
+              Sign up
+            </Link>
+          </p>
         </div>
 
         <p className="mt-6 text-center text-xs text-[var(--text-muted)]">

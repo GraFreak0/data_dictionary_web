@@ -919,8 +919,15 @@ def create_group():
         conn.close()
         
         log_activity(current_user.id, 'create_group', 'group', name)
-        
-        return jsonify({'success': True, 'group_id': group_id}), 201
+
+        return jsonify({
+            'id': group_id,
+            'name': name,
+            'description': description,
+            'created_at': datetime.utcnow().isoformat(),
+            'created_by': current_user.username,
+            'member_count': 0
+        }), 201
         
     except sqlite3.IntegrityError:
         conn.close()
@@ -1052,8 +1059,13 @@ def grant_group_permission(group_id):
     conn.close()
     
     log_activity(current_user.id, 'grant_group_permission', resource_type, resource_name)
-    
-    return jsonify({'success': True, 'permission_id': permission_id}), 201
+
+    return jsonify({
+        'id': permission_id,
+        'resource_type': resource_type,
+        'resource_name': resource_name,
+        'permission_level': permission_level
+    }), 201
 
 
 @app.route('/api/groups/<int:group_id>/permissions/<int:permission_id>', methods=['DELETE'])
@@ -1269,8 +1281,21 @@ def update_user(user_id):
     conn.close()
     
     log_activity(current_user.id, 'update_user', 'user', str(user_id))
-    
-    return jsonify({'success': True})
+
+    # Return the full updated user so the frontend doesn't need a second fetch
+    cursor2 = conn.cursor() if False else sqlite3.connect(app.config['DATABASE']).cursor()
+    cursor2.execute(
+        'SELECT id, username, email, role, created_at, last_login, is_active, can_export FROM users WHERE id = ?',
+        (user_id,)
+    )
+    row = cursor2.fetchone()
+    if not row:
+        return jsonify({'error': 'User not found'}), 404
+    return jsonify({
+        'id': row[0], 'username': row[1], 'email': row[2], 'role': row[3],
+        'created_at': row[4], 'last_login': row[5],
+        'is_active': bool(row[6]), 'can_export': bool(row[7])
+    })
 
 
 @app.route('/api/admin/users/<int:user_id>/permissions', methods=['GET'])
@@ -1322,8 +1347,13 @@ def grant_permission(user_id):
     conn.close()
     
     log_activity(current_user.id, 'grant_permission', resource_type, resource_name)
-    
-    return jsonify({'success': True, 'permission_id': permission_id}), 201
+
+    return jsonify({
+        'id': permission_id,
+        'resource_type': resource_type,
+        'resource_name': resource_name,
+        'permission_level': permission_level
+    }), 201
 
 
 @app.route('/api/admin/permissions/<int:permission_id>', methods=['DELETE'])
@@ -1340,6 +1370,35 @@ def revoke_permission(permission_id):
     log_activity(current_user.id, 'revoke_permission', resource_name=str(permission_id))
     
     return jsonify({'success': True})
+
+
+@app.route('/api/admin/activity', methods=['GET'])
+@role_required('admin')
+def get_activity_logs():
+    """Get recent activity logs with usernames (admin only)."""
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT al.id, al.action, al.resource_type, al.resource_name,
+               al.ip_address, al.timestamp, u.username
+        FROM activity_log al
+        LEFT JOIN users u ON al.user_id = u.id
+        ORDER BY al.timestamp DESC
+        LIMIT 500
+    ''')
+    logs = []
+    for row in cursor.fetchall():
+        logs.append({
+            'id': row[0],
+            'action': row[1],
+            'resource_type': row[2],
+            'resource_name': row[3],
+            'ip_address': row[4],
+            'timestamp': row[5],
+            'username': row[6]
+        })
+    conn.close()
+    return jsonify({'logs': logs})
 
 
 # ============================================================================

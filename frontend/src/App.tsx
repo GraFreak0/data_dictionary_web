@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect } from 'react'
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from './store/authStore'
 import { Layout } from './components/layout/Layout'
@@ -9,7 +9,6 @@ import { Profile } from './pages/Profile'
 import { Admin } from './pages/Admin'
 import { Groups } from './pages/Groups'
 
-// Loading screen
 function LoadingScreen() {
   return (
     <div className="flex h-screen items-center justify-center bg-[var(--bg-secondary)]">
@@ -21,8 +20,8 @@ function LoadingScreen() {
   )
 }
 
-// Listens for 401 events from the Axios interceptor and clears auth reactively
-// so React Router redirects via the route guards — no hard page reload.
+// Listens for 401 events fired by the Axios interceptor and clears auth
+// state reactively — no hard page reload / blank flash.
 function UnauthorizedHandler() {
   const clearAuth = useAuthStore((s) => s.clearAuth)
   const navigate = useNavigate()
@@ -39,7 +38,6 @@ function UnauthorizedHandler() {
   return null
 }
 
-// Protected route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isInitialized } = useAuthStore()
   const location = useLocation()
@@ -51,7 +49,6 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-// Admin-only route wrapper
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isInitialized } = useAuthStore()
   const location = useLocation()
@@ -66,25 +63,22 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-// Auth route — redirect to role-appropriate home if already logged in
+// If already logged in, redirect away from auth pages.
 function AuthRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isInitialized, user } = useAuthStore()
+  const { isAuthenticated, isInitialized } = useAuthStore()
 
   if (!isInitialized) return <LoadingScreen />
-  if (isAuthenticated) {
-    return <Navigate to={user?.role === 'admin' ? '/admin' : '/'} replace />
-  }
+  // Redirect to dashboard — the user chose where to go at sign-in time.
+  if (isAuthenticated) return <Navigate to="/" replace />
   return <>{children}</>
 }
 
 export default function App() {
   const { initialize, isInitialized } = useAuthStore()
-  const initCalledRef = useRef(false)
 
+  // initialize() has its own module-level guard against double invocation;
+  // calling it unconditionally here is safe.
   useEffect(() => {
-    // Prevent double-invocation from React StrictMode in development
-    if (initCalledRef.current) return
-    initCalledRef.current = true
     initialize()
   }, [initialize])
 
@@ -94,11 +88,9 @@ export default function App() {
     <>
       <UnauthorizedHandler />
       <Routes>
-        {/* Auth routes */}
         <Route path="/signin" element={<AuthRoute><SignIn /></AuthRoute>} />
         <Route path="/signup" element={<AuthRoute><SignUp /></AuthRoute>} />
 
-        {/* Protected routes with shared layout */}
         <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/profile" element={<Profile />} />
@@ -106,7 +98,6 @@ export default function App() {
           <Route path="/groups" element={<AdminRoute><Groups /></AdminRoute>} />
         </Route>
 
-        {/* Catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>
