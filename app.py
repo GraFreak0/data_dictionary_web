@@ -1550,6 +1550,96 @@ def get_activity_logs():
     return jsonify({'logs': logs})
 
 
+@app.route('/api/admin/activity/export', methods=['POST'])
+@role_required('admin')
+def export_activity_logs():
+    """Export filtered activity logs as CSV (admin only).
+
+    POST body (JSON):
+        {
+            "user_ids":       [1, 2, ...],          # optional — filter by user IDs
+            "actions":        ["login", ...],        # optional — filter by action names
+            "resource_types": ["schema", ...],       # optional — filter by resource type
+            "resource_name":  "my_table",            # optional — substring match on resource name
+            "date_from":      "2024-01-01",          # optional — ISO date (inclusive)
+            "date_to":        "2024-12-31"           # optional — ISO date (inclusive, end-of-day)
+        }
+    All filters are combinable (AND logic).
+    """
+    import csv as _csv
+
+    body = request.get_json() or {}
+    user_ids       = body.get('user_ids', [])
+    actions        = body.get('actions', [])
+    resource_types = body.get('resource_types', [])
+    resource_name  = (body.get('resource_name') or '').strip()
+    date_from      = (body.get('date_from') or '').strip()
+    date_to        = (body.get('date_to') or '').strip()
+
+    query = '''
+        SELECT al.id, al.action, al.resource_type, al.resource_name,
+               al.ip_address, al.timestamp, u.username
+        FROM activity_log al
+        LEFT JOIN users u ON al.user_id = u.id
+        WHERE 1=1
+    '''
+    params = []
+
+    if user_ids:
+        placeholders = ','.join('?' * len(user_ids))
+        query += f' AND al.user_id IN ({placeholders})'
+        params.extend(user_ids)
+
+    if actions:
+        placeholders = ','.join('?' * len(actions))
+        query += f' AND al.action IN ({placeholders})'
+        params.extend(actions)
+
+    if resource_types:
+        placeholders = ','.join('?' * len(resource_types))
+        query += f' AND al.resource_type IN ({placeholders})'
+        params.extend(resource_types)
+
+    if resource_name:
+        query += ' AND al.resource_name LIKE ?'
+        params.append(f'%{resource_name}%')
+
+    if date_from:
+        query += ' AND al.timestamp >= ?'
+        params.append(date_from)
+
+    if date_to:
+        date_to_end = (date_to + ' 23:59:59') if len(date_to) == 10 else date_to
+        query += ' AND al.timestamp <= ?'
+        params.append(date_to_end)
+
+    query += ' ORDER BY al.timestamp DESC'
+
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    conn.close()
+
+    output = io.StringIO()
+    writer = _csv.writer(output)
+    writer.writerow(['ID', 'Username', 'Action', 'Resource Type', 'Resource Name', 'IP Address', 'Timestamp'])
+    for row in rows:
+        writer.writerow([row[0], row[6] or '', row[1], row[2] or '', row[3] or '', row[4] or '', row[5]])
+
+    csv_bytes = output.getvalue().encode('utf-8')
+    filename = f'activity_log_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+
+    log_activity(current_user.id, 'export_activity_logs', 'activity_log')
+
+    return send_file(
+        io.BytesIO(csv_bytes),
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
 # ============================================================================
 # API Endpoints - Current User Permissions
 # ============================================================================
@@ -1878,10 +1968,6 @@ def serve_react(path: str):
     if path and os.path.exists(os.path.join(REACT_BUILD_DIR, path)):
         return send_from_directory(REACT_BUILD_DIR, path)
     return send_from_directory(REACT_BUILD_DIR, 'index.html')
-
-# ============================================================================
-# Main
-# ============================================================================
 
 if __name__ == '__main__':
     init_db()
