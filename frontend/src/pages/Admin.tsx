@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import {
@@ -21,6 +21,11 @@ import {
   List,
   CheckSquare,
   Square,
+  ChevronDown,
+  FileDown,
+  Filter,
+  X,
+  Calendar,
 } from 'lucide-react'
 import { adminService } from '../services/admin'
 import { catalogService } from '../services/catalog'
@@ -1066,40 +1071,385 @@ function UsersTab() {
   )
 }
 
+// ─── Multi-select Dropdown ────────────────────────────────────────────────────
+
+function MultiSelect({
+  label,
+  options,
+  selected,
+  onChange,
+}: {
+  label: string
+  options: { value: string; label: string }[]
+  selected: string[]
+  onChange: (values: string[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const toggle = (v: string) => {
+    onChange(selected.includes(v) ? selected.filter((s) => s !== v) : [...selected, v])
+  }
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-all min-w-[110px] justify-between ${
+          selected.length > 0
+            ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
+            : 'border-[var(--border-color)] text-[var(--text-secondary)] bg-[var(--bg-primary)] hover:bg-[var(--bg-secondary)]'
+        }`}
+      >
+        <span className="flex items-center gap-1.5">
+          <span>{label}</span>
+          {selected.length > 0 && (
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary-500 text-[10px] font-bold text-white">
+              {selected.length}
+            </span>
+          )}
+        </span>
+        <ChevronDown size={13} className={`transition-transform shrink-0 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-50 min-w-[180px] max-h-56 overflow-y-auto rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] shadow-lg">
+          {options.length === 0 ? (
+            <p className="px-3 py-2 text-sm text-[var(--text-muted)]">No options</p>
+          ) : (
+            <div className="py-1">
+              {selected.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { onChange([]); setOpen(false) }}
+                  className="w-full px-3 py-1.5 text-left text-xs text-red-400 hover:bg-[var(--bg-secondary)] border-b border-[var(--border-color)]"
+                >
+                  Clear all
+                </button>
+              )}
+              {options.map((opt) => (
+                <label
+                  key={opt.value}
+                  className="flex items-center gap-2 px-3 py-1.5 hover:bg-[var(--bg-secondary)] cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(opt.value)}
+                    onChange={() => toggle(opt.value)}
+                    className="rounded accent-primary-500"
+                  />
+                  <span className="text-sm text-[var(--text-primary)]">{opt.label}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── User Typeahead ───────────────────────────────────────────────────────────
+
+function UserTypeahead({
+  users,
+  selected,
+  onChange,
+}: {
+  users: User[]
+  selected: string[]
+  onChange: (values: string[]) => void
+}) {
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false)
+        setQuery('')
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const selectedUsers = users.filter((u) => selected.includes(String(u.id)))
+  const filteredOptions = users.filter(
+    (u) =>
+      !selected.includes(String(u.id)) &&
+      (u.username.toLowerCase().includes(query.toLowerCase()) ||
+        u.email.toLowerCase().includes(query.toLowerCase()))
+  )
+
+  const addUser = (userId: string) => {
+    onChange([...selected, userId])
+    setQuery('')
+    inputRef.current?.focus()
+  }
+
+  const removeUser = (userId: string) => {
+    onChange(selected.filter((s) => s !== userId))
+  }
+
+  return (
+    <div className="relative min-w-[200px]" ref={ref}>
+      <div
+        className={`flex flex-wrap items-center gap-1 rounded-lg border px-2 py-1.5 min-h-[38px] bg-[var(--bg-primary)] cursor-text transition-colors ${
+          open
+            ? 'border-primary-500 ring-1 ring-primary-500/20'
+            : 'border-[var(--border-color)]'
+        }`}
+        onClick={() => { setOpen(true); inputRef.current?.focus() }}
+      >
+        {selectedUsers.map((u) => (
+          <span
+            key={u.id}
+            className="flex items-center gap-1 rounded-md bg-primary-100 dark:bg-primary-900/30 px-2 py-0.5 text-xs font-medium text-primary-700 dark:text-primary-300"
+          >
+            {u.username}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); removeUser(String(u.id)) }}
+              className="hover:text-primary-900 dark:hover:text-primary-100 transition-colors"
+            >
+              <X size={11} />
+            </button>
+          </span>
+        ))}
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true) }}
+          onFocus={() => setOpen(true)}
+          placeholder={selectedUsers.length === 0 ? 'Search users…' : ''}
+          className="flex-1 min-w-[80px] bg-transparent text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
+        />
+      </div>
+      {open && (
+        <div className="absolute top-full left-0 right-0 mt-1 z-50 max-h-56 overflow-y-auto rounded-lg border border-[var(--border-color)] bg-[var(--bg-primary)] shadow-lg">
+          {filteredOptions.length === 0 ? (
+            <p className="px-3 py-2 text-sm text-[var(--text-muted)]">
+              {query ? 'No users match' : selected.length === users.length ? 'All users selected' : 'Type to search'}
+            </p>
+          ) : (
+            <div className="py-1">
+              {filteredOptions.map((u) => (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={() => addUser(String(u.id))}
+                  className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-[var(--bg-secondary)] transition-colors"
+                >
+                  <div className="h-6 w-6 rounded-full bg-primary-600 flex items-center justify-center text-[10px] font-bold text-white shrink-0">
+                    {getInitials(u.username)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm text-[var(--text-primary)]">{u.username}</p>
+                    <p className="text-xs text-[var(--text-muted)] truncate">{u.email}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Activity Tab ─────────────────────────────────────────────────────────────
 
 function ActivityTab() {
   const [logs, setLogs] = useState<ActivityLog[]>([])
+  const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
+  const [exporting, setExporting] = useState(false)
   const [search, setSearch] = useState('')
 
+  // Filters
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([])
+  const [selectedActions, setSelectedActions] = useState<string[]>([])
+  const [selectedResourceTypes, setSelectedResourceTypes] = useState<string[]>([])
+  const [resourceName, setResourceName] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+
   useEffect(() => {
-    adminService
-      .getActivityLogs()
-      .then(setLogs)
+    Promise.all([adminService.getActivityLogs(), adminService.getUsers()])
+      .then(([logsData, usersData]) => {
+        setLogs(logsData)
+        setUsers(usersData)
+      })
       .catch(() => toast.error('Failed to load activity logs'))
       .finally(() => setLoading(false))
   }, [])
 
-  const filtered = logs.filter(
-    (l) =>
-      l.action?.toLowerCase().includes(search.toLowerCase()) ||
-      l.resource_name?.toLowerCase().includes(search.toLowerCase()) ||
-      l.username?.toLowerCase().includes(search.toLowerCase())
+  const actionOptions = useMemo(
+    () => [...new Set(logs.map((l) => l.action).filter(Boolean))].sort().map((a) => ({ value: a, label: a })),
+    [logs]
   )
+  const resourceTypeOptions = useMemo(
+    () => [...new Set(logs.map((l) => l.resource_type).filter(Boolean))].sort().map((rt) => ({ value: rt, label: rt })),
+    [logs]
+  )
+
+  const hasActiveFilters =
+    selectedUsers.length > 0 ||
+    selectedActions.length > 0 ||
+    selectedResourceTypes.length > 0 ||
+    resourceName !== '' ||
+    dateFrom !== '' ||
+    dateTo !== ''
+
+  const clearFilters = () => {
+    setSelectedUsers([])
+    setSelectedActions([])
+    setSelectedResourceTypes([])
+    setResourceName('')
+    setDateFrom('')
+    setDateTo('')
+  }
+
+  const filtered = useMemo(() => {
+    return logs.filter((l) => {
+      if (selectedUsers.length && !selectedUsers.includes(String(l.user_id))) return false
+      if (selectedActions.length && !selectedActions.includes(l.action)) return false
+      if (selectedResourceTypes.length && !selectedResourceTypes.includes(l.resource_type)) return false
+      if (resourceName && !l.resource_name?.toLowerCase().includes(resourceName.toLowerCase())) return false
+      if (dateFrom && l.timestamp < dateFrom) return false
+      if (dateTo && l.timestamp > dateTo + 'T23:59:59') return false
+      if (search) {
+        const q = search.toLowerCase()
+        if (
+          !l.action?.toLowerCase().includes(q) &&
+          !l.resource_name?.toLowerCase().includes(q) &&
+          !l.username?.toLowerCase().includes(q)
+        )
+          return false
+      }
+      return true
+    })
+  }, [logs, selectedUsers, selectedActions, selectedResourceTypes, resourceName, dateFrom, dateTo, search])
+
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      await adminService.exportActivityLogs({
+        user_ids: selectedUsers.map(Number),
+        actions: selectedActions,
+        resource_types: selectedResourceTypes,
+        resource_name: resourceName,
+        date_from: dateFrom,
+        date_to: dateTo,
+      })
+      toast.success(`Exported ${filtered.length} record${filtered.length !== 1 ? 's' : ''}`)
+    } catch {
+      toast.error('Export failed')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <div className="space-y-4">
-      <div className="relative max-w-sm">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+      {/* Search + Export */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search activity..."
+            className="input pl-9"
+          />
+        </div>
+        <Button
+          icon={<FileDown size={16} />}
+          onClick={handleExport}
+          loading={exporting}
+          disabled={loading}
+          variant="secondary"
+        >
+          Export CSV
+        </Button>
+      </div>
+
+      {/* Filter row */}
+      <div className="flex items-center gap-2 flex-wrap rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-3">
+        <Filter size={14} className="text-[var(--text-muted)] shrink-0" />
+        <UserTypeahead
+          users={users}
+          selected={selectedUsers}
+          onChange={setSelectedUsers}
+        />
+        <MultiSelect
+          label="Actions"
+          options={actionOptions}
+          selected={selectedActions}
+          onChange={setSelectedActions}
+        />
+        <MultiSelect
+          label="Resource Type"
+          options={resourceTypeOptions}
+          selected={selectedResourceTypes}
+          onChange={setSelectedResourceTypes}
+        />
         <input
           type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Filter activity..."
-          className="input pl-9"
+          value={resourceName}
+          onChange={(e) => setResourceName(e.target.value)}
+          placeholder="Resource name..."
+          className="input text-sm py-2 min-w-[140px]"
         />
+        <div className="flex items-center gap-1.5">
+          <Calendar size={14} className="text-[var(--text-muted)] shrink-0" />
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="input text-sm py-2"
+            title="From date"
+          />
+          <span className="text-[var(--text-muted)] text-sm">—</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="input text-sm py-2"
+            title="To date"
+          />
+        </div>
+        {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="ml-auto flex items-center gap-1 text-xs text-red-400 hover:text-red-500 transition-colors"
+          >
+            <X size={13} />
+            Clear filters
+          </button>
+        )}
       </div>
+
+      {/* Results count when filters are active */}
+      {hasActiveFilters && !loading && (
+        <p className="text-xs text-[var(--text-muted)]">
+          Showing {filtered.length} of {logs.length} records
+        </p>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-12">
@@ -1128,7 +1478,7 @@ function ActivityTab() {
                   <td>
                     {log.username ? (
                       <div className="flex items-center gap-2">
-                        <div className="h-6 w-6 rounded-full bg-primary-600 flex items-center justify-center text-[10px] font-bold text-white">
+                        <div className="h-6 w-6 rounded-full bg-primary-600 flex items-center justify-center text-[10px] font-bold text-white shrink-0">
                           {getInitials(log.username)}
                         </div>
                         <span className="text-sm">{log.username}</span>
