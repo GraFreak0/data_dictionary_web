@@ -3,7 +3,7 @@ Data Dictionary Web UI - Flask Backend with RBAC
 ENHANCED VERSION with User Groups, PDF Export, and Complete Features
 """
 
-from flask import Flask, request, jsonify, session, render_template, send_file
+from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -17,14 +17,156 @@ from typing import List, Dict, Any, Optional
 import secrets
 from dotenv import load_dotenv
 import io
-from reportlab.lib.pagesizes import letter, A4
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.lib import colors
+import threading
+import tempfile
+import shutil
 
 # Load environment variables from .env file
 load_dotenv()
+
+# ============================================================================
+# Exporter Plugin Loader
+# ============================================================================
+# Auto-discovers every BaseExporter subclass in the `exporters/` package.
+# Drop a new file into that directory — no changes to app.py required.
+
+import importlib, pkgutil, sys, os
+
+def load_exporters() -> dict:
+    """
+    Walk the exporters/ package, import every module, then collect all
+    concrete subclasses of BaseExporter.  Returns {name: instance}.
+    """
+    from exporters.base import BaseExporter
+
+    # Make sure the exporters directory next to app.py is importable
+    exporters_dir = os.path.join(os.path.dirname(__file__), 'exporters')
+    if exporters_dir not in sys.path:
+        sys.path.insert(0, os.path.dirname(__file__))
+
+    import exporters as _exporters_pkg
+    for _finder, _modname, _ispkg in pkgutil.iter_modules(_exporters_pkg.__path__):
+        if _modname != 'base':
+            importlib.import_module(f'exporters.{_modname}')
+
+    found = {}
+    for cls in BaseExporter.__subclasses__():
+        if cls.name:
+            found[cls.name] = cls()
+    return found
+
+EXPORTERS: dict = load_exporters()
+
+# ── YAML in-memory cache (mtime-based) ────────────────────────────────────────
+_yaml_cache: dict = {}          # filepath -> {'mtime': float, 'data': dict}
+_yaml_cache_lock = threading.RLock()
+
+# Per-file write locks (prevent concurrent writes to the same file)
+_file_write_locks: dict = {}
+_file_write_locks_mutex = threading.Lock()
+
+
+def _get_write_lock(filepath: str) -> threading.RLock:
+    """Return (and lazily create) the per-file write lock."""
+    with _file_write_locks_mutex:
+        if filepath not in _file_write_locks:
+            _file_write_locks[filepath] = threading.RLock()
+        return _file_write_locks[filepath]
+
+
+def _atomic_write_yaml(filepath: str, content: dict) -> None:
+    """
+    Thread-safe, atomic YAML write.
+    Must be called while holding the file's write lock.
+
+    Steps:
+      1. Serialise to a temp file in the same directory.
+      2. Parse the temp file to verify it is valid YAML.
+      3. Copy the original to <filepath>.bak.
+      4. os.replace() — atomic on POSIX and Windows (same filesystem).
+      5. Invalidate / update the in-memory cache.
+    """
+    dir_name = os.path.dirname(os.path.abspath(filepath))
+    fd, tmp_path = tempfile.mkstemp(suffix='.yml.tmp', dir=dir_name)
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as fh:
+            yaml.dump(content, fh,
+                      default_flow_style=False,
+                      allow_unicode=True,
+                      sort_keys=False,
+                      indent=2)
+
+        # Validate: the written file must parse back cleanly
+        with open(tmp_path, 'r', encoding='utf-8') as fh:
+            verified = yaml.safe_load(fh)
+        if not isinstance(verified, dict):
+            raise ValueError('YAML validation failed: root is not a mapping')
+
+        # Backup original
+        if os.path.exists(filepath):
+            shutil.copy2(filepath, filepath + '.bak')
+
+        # Atomic rename
+        os.replace(tmp_path, filepath)
+
+        # Update cache
+        mtime = os.stat(filepath).st_mtime
+        with _yaml_cache_lock:
+            _yaml_cache[filepath] = {'mtime': mtime, 'data': content}
+
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
+def _build_export_data(user, export_type: str, resources: list) -> dict:
+    """
+    Build the normalised data dict that is passed to every exporter.
+    Applies per-user RBAC filtering so exporters never need to.
+    """
+    from datetime import datetime as _dt
+
+    yaml_data            = load_yaml_files()
+    accessible_resources = get_user_accessible_resources(user.id)
+
+    schemas = []
+    for filename, file_data in yaml_data.items():
+        if not file_data or 'models' not in file_data:
+            continue
+        schema_name = filename.replace('schema_', '').replace('.yml', '').replace('.yaml', '')
+        if schema_name not in accessible_resources['databases']:
+            continue
+        if resources and schema_name not in resources:
+            continue
+
+        tables = []
+        for model in file_data.get('models', []):
+            tables.append({
+                'name':        model.get('name', ''),
+                'description': model.get('description', ''),
+                'columns': [
+                    {
+                        'name':        col.get('name', ''),
+                        'data_type':   col.get('data_type', ''),
+                        'description': col.get('description', ''),
+                    }
+                    for col in model.get('columns', [])
+                ],
+            })
+        schemas.append({'name': schema_name, 'tables': tables})
+
+    return {
+        'meta': {
+            'generated_by': user.username,
+            'generated_at': _dt.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'export_type':  export_type,
+        },
+        'schemas': schemas,
+    }
+
 
 app = Flask(__name__)
 
@@ -73,7 +215,7 @@ SECRET_KEY, JWT_SECRET_KEY = load_or_generate_keys()
 
 app.config['SECRET_KEY'] = SECRET_KEY
 app.config['JWT_SECRET_KEY'] = JWT_SECRET_KEY
-app.config['YAML_DIRECTORY'] = os.getenv('YAML_DIRECTORY', './dbt_models')
+app.config['YAML_DIRECTORY'] = os.getenv('YAML_DIRECTORY', './models')
 app.config['DATABASE'] = os.getenv('DATABASE', './data_dictionary.db')
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
@@ -282,35 +424,43 @@ def check_resource_access(user_id: int, resource_type: str, resource_name: str) 
     """
     Check if user has access to a specific resource.
     Checks both individual permissions and group permissions.
+    'schema' and 'database' are treated as equivalent resource types.
     """
     # Admin has access to everything
     user = User.get(user_id)
     if user and user.role == 'admin':
         return True
-    
+
+    # Normalise: accept both 'schema' and 'database' for schema-level access
+    if resource_type in ('database', 'schema'):
+        type_variants = ('database', 'schema')
+    else:
+        type_variants = (resource_type,)
+
+    placeholders = ','.join(['?' for _ in type_variants])
+
     conn = sqlite3.connect(app.config['DATABASE'])
     cursor = conn.cursor()
-    
+
     # Check individual permissions
-    cursor.execute('''
-        SELECT * FROM permissions 
-        WHERE user_id = ? AND resource_type = ? AND resource_name = ?
-    ''', (user_id, resource_type, resource_name))
-    
+    cursor.execute(
+        f'SELECT id FROM permissions WHERE user_id = ? AND resource_type IN ({placeholders}) AND resource_name = ?',
+        (user_id, *type_variants, resource_name),
+    )
     if cursor.fetchone():
         conn.close()
         return True
-    
+
     # Check group permissions
-    cursor.execute('''
-        SELECT gp.* FROM group_permissions gp
-        JOIN user_group_members ugm ON gp.group_id = ugm.group_id
-        WHERE ugm.user_id = ? AND gp.resource_type = ? AND gp.resource_name = ?
-    ''', (user_id, resource_type, resource_name))
-    
+    cursor.execute(
+        f'''SELECT gp.id FROM group_permissions gp
+            JOIN user_group_members ugm ON gp.group_id = ugm.group_id
+            WHERE ugm.user_id = ? AND gp.resource_type IN ({placeholders}) AND gp.resource_name = ?''',
+        (user_id, *type_variants, resource_name),
+    )
     result = cursor.fetchone()
     conn.close()
-    
+
     return result is not None
 
 
@@ -351,7 +501,7 @@ def get_user_accessible_resources(user_id: int) -> Dict[str, List[str]]:
     
     resources = {'databases': [], 'tables': []}
     for perm_type, perm_name in all_perms:
-        if perm_type == 'database':
+        if perm_type in ('database', 'schema'):
             resources['databases'].append(perm_name)
         elif perm_type == 'table':
             resources['tables'].append(perm_name)
@@ -379,23 +529,36 @@ def log_activity(user_id: int, action: str, resource_type: str = None, resource_
 # ============================================================================
 
 def load_yaml_files() -> Dict[str, Any]:
-    """Load all YAML files from the configured directory."""
+    """Load YAML files with mtime-based in-memory caching for fast repeated access."""
     yaml_data = {}
     yaml_dir = app.config['YAML_DIRECTORY']
-    
+
     if not os.path.exists(yaml_dir):
         return yaml_data
-    
-    for filename in os.listdir(yaml_dir):
-        if filename.endswith('.yml') or filename.endswith('.yaml'):
+
+    try:
+        filenames = sorted(os.listdir(yaml_dir))
+    except OSError:
+        return yaml_data
+
+    with _yaml_cache_lock:
+        for filename in filenames:
+            if not filename.endswith(('.yml', '.yaml')):
+                continue
             filepath = os.path.join(yaml_dir, filename)
             try:
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    data = yaml.safe_load(f)
+                mtime = os.stat(filepath).st_mtime
+                cached = _yaml_cache.get(filepath)
+                if cached and cached['mtime'] == mtime:
+                    yaml_data[filename] = cached['data']
+                else:
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        data = yaml.safe_load(f)
+                    _yaml_cache[filepath] = {'mtime': mtime, 'data': data}
                     yaml_data[filename] = data
             except Exception as e:
-                print(f"Error loading {filename}: {e}")
-    
+                print(f'[yaml cache] Error loading {filename}: {e}')
+
     return yaml_data
 
 
@@ -489,151 +652,13 @@ def get_table_details(schema: str, table: str, user_id: int) -> Optional[Dict[st
             if model.get('name') == table:
                 return {
                     'schema': schema,
-                    'table': table,
+                    'name': table,
                     'description': model.get('description', ''),
                     'meta': model.get('meta', {}),
                     'columns': model.get('columns', [])
                 }
     
     return None
-
-
-# ============================================================================
-# PDF Export Functions (NEW)
-# ============================================================================
-
-def generate_pdf_export(user_id: int, export_type: str = 'full', resources: List[str] = None) -> bytes:
-    """
-    Generate PDF export of data dictionary.
-    
-    Args:
-        user_id: User requesting export
-        export_type: 'full' or 'filtered'
-        resources: List of specific resources to export (schemas or tables)
-    
-    Returns:
-        PDF file as bytes
-    """
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.75*inch, bottomMargin=0.75*inch)
-    
-    # Container for PDF elements
-    elements = []
-    styles = getSampleStyleSheet()
-    
-    # Title style
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=24,
-        textColor=colors.HexColor('#2563eb'),
-        spaceAfter=30,
-        alignment=1  # Center
-    )
-    
-    # Add title
-    elements.append(Paragraph("Data Dictionary", title_style))
-    elements.append(Spacer(1, 0.2*inch))
-    
-    # Add metadata
-    user = User.get(user_id)
-    meta_data = [
-        ['Generated by:', user.username],
-        ['Generated at:', datetime.now().strftime('%Y-%m-%d %H:%M:%S')],
-        ['Export type:', export_type.capitalize()]
-    ]
-    
-    meta_table = Table(meta_data, colWidths=[2*inch, 4*inch])
-    meta_table.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('TEXTCOLOR', (0, 0), (0, -1), colors.grey),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-    ]))
-    
-    elements.append(meta_table)
-    elements.append(Spacer(1, 0.3*inch))
-    
-    # Load YAML data
-    yaml_data = load_yaml_files()
-    
-    # Get accessible resources
-    accessible_resources = get_user_accessible_resources(user_id)
-    
-    # Filter by user permissions
-    for filename, data in yaml_data.items():
-        if not data or 'models' not in data:
-            continue
-        
-        schema_name = filename.replace('schema_', '').replace('.yml', '').replace('.yaml', '')
-        
-        # Check access
-        if schema_name not in accessible_resources['databases']:
-            continue
-        
-        # Schema header
-        elements.append(Paragraph(f"Schema: {schema_name}", styles['Heading2']))
-        elements.append(Spacer(1, 0.1*inch))
-        
-        # Process each table
-        for model in data.get('models', []):
-            table_name = model.get('name', '')
-            
-            # Table name
-            elements.append(Paragraph(f"Table: {table_name}", styles['Heading3']))
-            
-            # Table description
-            desc = model.get('description', 'No description')
-            elements.append(Paragraph(f"<i>{desc}</i>", styles['Normal']))
-            elements.append(Spacer(1, 0.1*inch))
-            
-            # Columns table
-            columns = model.get('columns', [])
-            if columns:
-                col_data = [['Column', 'Type', 'Description']]
-                
-                for col in columns:
-                    col_data.append([
-                        col.get('name', ''),
-                        col.get('data_type', ''),
-                        col.get('description', '')[:50] + '...' if len(col.get('description', '')) > 50 else col.get('description', '')
-                    ])
-                
-                col_table = Table(col_data, colWidths=[1.5*inch, 1.5*inch, 3.5*inch])
-                col_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2563eb')),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, 0), 10),
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                    ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                    ('FONTSIZE', (0, 1), (-1, -1), 8),
-                ]))
-                
-                elements.append(col_table)
-            
-            elements.append(Spacer(1, 0.3*inch))
-        
-        elements.append(PageBreak())
-    
-    # Build PDF
-    doc.build(elements)
-    
-    # Log export
-    conn = sqlite3.connect(app.config['DATABASE'])
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO export_log (user_id, export_type, resources_exported, file_size)
-        VALUES (?, ?, ?, ?)
-    ''', (user_id, export_type, ','.join(accessible_resources['databases']), buffer.tell()))
-    conn.commit()
-    conn.close()
-    
-    buffer.seek(0)
-    return buffer.getvalue()
 
 
 # ============================================================================
@@ -982,8 +1007,15 @@ def create_group():
         conn.close()
         
         log_activity(current_user.id, 'create_group', 'group', name)
-        
-        return jsonify({'success': True, 'group_id': group_id}), 201
+
+        return jsonify({
+            'id': group_id,
+            'name': name,
+            'description': description,
+            'created_at': datetime.utcnow().isoformat(),
+            'created_by': current_user.username,
+            'member_count': 0
+        }), 201
         
     except sqlite3.IntegrityError:
         conn.close()
@@ -1115,8 +1147,13 @@ def grant_group_permission(group_id):
     conn.close()
     
     log_activity(current_user.id, 'grant_group_permission', resource_type, resource_name)
-    
-    return jsonify({'success': True, 'permission_id': permission_id}), 201
+
+    return jsonify({
+        'id': permission_id,
+        'resource_type': resource_type,
+        'resource_name': resource_name,
+        'permission_level': permission_level
+    }), 201
 
 
 @app.route('/api/groups/<int:group_id>/permissions/<int:permission_id>', methods=['DELETE'])
@@ -1136,31 +1173,87 @@ def revoke_group_permission(group_id, permission_id):
 
 
 # ============================================================================
-# API Endpoints - PDF Export (NEW)
 # ============================================================================
 
-@app.route('/api/export/pdf', methods=['POST'])
+@app.route('/api/export/formats', methods=['GET'])
+@login_required
+def list_export_formats():
+    """List all available export formats."""
+    return jsonify([
+        {'name': exp.name, 'label': exp.label, 'extension': exp.extension}
+        for exp in EXPORTERS.values()
+    ])
+
+
+@app.route('/api/export/<format_name>', methods=['POST'])
 @export_permission_required
-def export_pdf():
-    """Export data dictionary as PDF."""
-    data = request.get_json()
-    export_type = data.get('type', 'full')  # 'full' or 'filtered'
-    resources = data.get('resources', [])  # Specific resources to export
-    
+def run_export(format_name):
+    """
+    Export the data dictionary in the requested format.
+
+    POST body (JSON):
+        {
+            "type":      "full" | "filtered",   # default: "full"
+            "resources": ["schema1", ...]        # optional filter list
+        }
+
+    The format_name must match an exporter's `name` attribute.
+    Available formats are listed at GET /api/export/formats.
+    """
+    exporter = EXPORTERS.get(format_name)
+    if not exporter:
+        available = list(EXPORTERS.keys())
+        return jsonify({
+            'error': f'Unknown format "{format_name}". Available: {available}'
+        }), 404
+
+    body        = request.get_json() or {}
+    export_type = body.get('type', 'full')
+    resources   = body.get('resources', [])
+
     try:
-        pdf_data = generate_pdf_export(current_user.id, export_type, resources)
-        
-        log_activity(current_user.id, 'export_pdf', export_type)
-        
-        return send_file(
-            io.BytesIO(pdf_data),
-            mimetype='application/pdf',
-            as_attachment=True,
-            download_name=f'data_dictionary_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
+        export_data = _build_export_data(current_user, export_type, resources)
+        file_bytes  = exporter.export(export_data, current_user, export_type, resources)
+
+        log_activity(current_user.id, f'export_{format_name}', export_type)
+
+        # Log to export_log table
+        conn   = sqlite3.connect(app.config['DATABASE'])
+        cursor = conn.cursor()
+        cursor.execute(
+            '''INSERT INTO export_log (user_id, export_type, resources_exported, file_size)
+               VALUES (?, ?, ?, ?)''',
+            (
+                current_user.id,
+                export_type,
+                ','.join(s['name'] for s in export_data.get('schemas', [])),
+                len(file_bytes),
+            )
         )
-        
+        conn.commit()
+        conn.close()
+
+        filename = f'data_dictionary_{datetime.now().strftime("%Y%m%d_%H%M%S")}{exporter.extension}'
+        return send_file(
+            io.BytesIO(file_bytes),
+            mimetype=exporter.mime_type,
+            as_attachment=True,
+            download_name=filename,
+        )
+
     except Exception as e:
         return jsonify({'error': f'Export failed: {str(e)}'}), 500
+
+
+# Keep /api/export/pdf as a convenience alias so existing clients don't break
+@app.route('/api/export/pdf', methods=['POST'])
+@export_permission_required
+def export_pdf_alias():
+    """Backwards-compatible alias → delegates to /api/export/pdf route."""
+    from flask import current_app
+    with current_app.test_request_context():
+        pass
+    return run_export('pdf')
 
 
 @app.route('/api/export/check-permission', methods=['GET'])
@@ -1232,9 +1325,18 @@ def create_user():
         user_id = cursor.lastrowid
         
         log_activity(current_user.id, 'create_user', 'user', username)
-        
+
         conn.close()
-        return jsonify({'success': True, 'user_id': user_id}), 201
+        return jsonify({
+            'id': user_id,
+            'username': username,
+            'email': email,
+            'role': role,
+            'can_export': bool(can_export),
+            'is_active': True,
+            'created_at': datetime.now().isoformat(),
+            'last_login': None,
+        }), 201
     except sqlite3.IntegrityError:
         conn.close()
         return jsonify({'error': 'Username or email already exists'}), 409
@@ -1276,8 +1378,21 @@ def update_user(user_id):
     conn.close()
     
     log_activity(current_user.id, 'update_user', 'user', str(user_id))
-    
-    return jsonify({'success': True})
+
+    # Return the full updated user so the frontend doesn't need a second fetch
+    cursor2 = conn.cursor() if False else sqlite3.connect(app.config['DATABASE']).cursor()
+    cursor2.execute(
+        'SELECT id, username, email, role, created_at, last_login, is_active, can_export FROM users WHERE id = ?',
+        (user_id,)
+    )
+    row = cursor2.fetchone()
+    if not row:
+        return jsonify({'error': 'User not found'}), 404
+    return jsonify({
+        'id': row[0], 'username': row[1], 'email': row[2], 'role': row[3],
+        'created_at': row[4], 'last_login': row[5],
+        'is_active': bool(row[6]), 'can_export': bool(row[7])
+    })
 
 
 @app.route('/api/admin/users/<int:user_id>/permissions', methods=['GET'])
@@ -1329,8 +1444,65 @@ def grant_permission(user_id):
     conn.close()
     
     log_activity(current_user.id, 'grant_permission', resource_type, resource_name)
-    
-    return jsonify({'success': True, 'permission_id': permission_id}), 201
+
+    return jsonify({
+        'id': permission_id,
+        'resource_type': resource_type,
+        'resource_name': resource_name,
+        'permission_level': permission_level
+    }), 201
+
+
+@app.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
+@role_required('admin')
+def delete_user(user_id):
+    """Delete a user (admin only). Cannot delete yourself."""
+    if user_id == current_user.id:
+        return jsonify({'error': 'Cannot delete your own account'}), 400
+
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    cursor.execute('SELECT id FROM users WHERE id = ?', (user_id,))
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({'error': 'User not found'}), 404
+
+    # Remove related data first
+    cursor.execute('DELETE FROM permissions WHERE user_id = ?', (user_id,))
+    cursor.execute('DELETE FROM user_group_members WHERE user_id = ?', (user_id,))
+    cursor.execute('DELETE FROM users WHERE id = ?', (user_id,))
+    conn.commit()
+    conn.close()
+
+    log_activity(current_user.id, 'delete_user', 'user', str(user_id))
+    return jsonify({'success': True})
+
+
+@app.route('/api/admin/users/<int:user_id>/reset-password', methods=['POST'])
+@role_required('admin')
+def admin_reset_password(user_id):
+    """Admin sets a new password for any user."""
+    data = request.get_json()
+    new_password = data.get('new_password', '')
+
+    if len(new_password) < 8:
+        return jsonify({'error': 'Password must be at least 8 characters'}), 400
+
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    cursor.execute('SELECT id, username FROM users WHERE id = ?', (user_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'error': 'User not found'}), 404
+
+    new_hash = generate_password_hash(new_password)
+    cursor.execute('UPDATE users SET password_hash = ? WHERE id = ?', (new_hash, user_id))
+    conn.commit()
+    conn.close()
+
+    log_activity(current_user.id, 'admin_reset_password', 'user', row[1])
+    return jsonify({'success': True, 'message': f'Password reset for {row[1]}'})
 
 
 @app.route('/api/admin/permissions/<int:permission_id>', methods=['DELETE'])
@@ -1349,54 +1521,363 @@ def revoke_permission(permission_id):
     return jsonify({'success': True})
 
 
+@app.route('/api/admin/activity', methods=['GET'])
+@role_required('admin')
+def get_activity_logs():
+    """Get recent activity logs with usernames (admin only)."""
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT al.id, al.action, al.resource_type, al.resource_name,
+               al.ip_address, al.timestamp, u.username
+        FROM activity_log al
+        LEFT JOIN users u ON al.user_id = u.id
+        ORDER BY al.timestamp DESC
+        LIMIT 500
+    ''')
+    logs = []
+    for row in cursor.fetchall():
+        logs.append({
+            'id': row[0],
+            'action': row[1],
+            'resource_type': row[2],
+            'resource_name': row[3],
+            'ip_address': row[4],
+            'timestamp': row[5],
+            'username': row[6]
+        })
+    conn.close()
+    return jsonify({'logs': logs})
+
+
 # ============================================================================
-# HTML Page Routes
+# API Endpoints - Current User Permissions
 # ============================================================================
 
-@app.route('/')
-def index():
-    """Serve the main application page (requires login)."""
-    return render_template('index.html')
+@app.route('/api/me/permissions', methods=['GET'])
+@login_required
+def get_my_permissions():
+    """Get permissions for the currently authenticated user (individual + group)."""
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT id, resource_type, resource_name, permission_level
+        FROM permissions WHERE user_id = ?
+    ''', (current_user.id,))
+    permissions = [
+        {'id': r[0], 'resource_type': r[1], 'resource_name': r[2], 'permission_level': r[3]}
+        for r in cursor.fetchall()
+    ]
+
+    cursor.execute('''
+        SELECT gp.id, gp.resource_type, gp.resource_name, gp.permission_level
+        FROM group_permissions gp
+        JOIN user_group_members ugm ON gp.group_id = ugm.group_id
+        WHERE ugm.user_id = ?
+    ''', (current_user.id,))
+    for r in cursor.fetchall():
+        permissions.append({
+            'id': r[0], 'resource_type': r[1], 'resource_name': r[2],
+            'permission_level': r[3], 'from_group': True
+        })
+
+    conn.close()
+    is_admin = current_user.role == 'admin'
+    return jsonify({'permissions': permissions, 'is_admin': is_admin})
 
 
-@app.route('/signin')
-def signin_page():
-    """Serve the signin page."""
-    return render_template('signin.html')
+# ============================================================================
+# API Endpoints - Analytics
+# ============================================================================
+
+@app.route('/api/analytics', methods=['GET'])
+@login_required
+def get_analytics():
+    """Return analytics data for accessible schemas."""
+    yaml_data = load_yaml_files()
+    schemas_out = []
+    all_data_types: Dict[str, int] = {}
+
+    for filename, data in yaml_data.items():
+        schema_name = filename.replace('schema_', '').replace('.yml', '').replace('.yaml', '')
+        if not check_resource_access(current_user.id, 'database', schema_name):
+            continue
+        if not data or 'models' not in data:
+            continue
+
+        tables = []
+        schema_col_count = 0
+        for model in data.get('models', []):
+            cols = model.get('columns', [])
+            col_count = len(cols)
+            schema_col_count += col_count
+            tables.append({
+                'name': model.get('name', ''),
+                'column_count': col_count,
+                'description': model.get('description', '') or '',
+            })
+            for col in cols:
+                dtype = (col.get('data_type') or 'unknown').lower()
+                if 'int' in dtype:
+                    key = 'integer'
+                elif any(x in dtype for x in ('varchar', 'char', 'text', 'string')):
+                    key = 'string'
+                elif any(x in dtype for x in ('timestamp', 'date', 'time')):
+                    key = 'datetime'
+                elif 'bool' in dtype:
+                    key = 'boolean'
+                elif any(x in dtype for x in ('float', 'double', 'decimal', 'numeric', 'number')):
+                    key = 'numeric'
+                else:
+                    key = dtype if dtype else 'unknown'
+                all_data_types[key] = all_data_types.get(key, 0) + 1
+
+        schemas_out.append({
+            'name': schema_name,
+            'table_count': len(tables),
+            'column_count': schema_col_count,
+            'tables': sorted(tables, key=lambda t: t['column_count'], reverse=True),
+        })
+
+    schemas_out.sort(key=lambda s: s['table_count'], reverse=True)
+    return jsonify({
+        'schemas': schemas_out,
+        'data_types': all_data_types,
+        'totals': {
+            'schemas': len(schemas_out),
+            'tables': sum(s['table_count'] for s in schemas_out),
+            'columns': sum(s['column_count'] for s in schemas_out),
+        },
+    })
 
 
-@app.route('/signup')
-def signup_page():
-    """Serve the signup page."""
-    return render_template('signup.html')
+# ============================================================================
+# API Endpoints - Metadata Editing
+# ============================================================================
+
+def _check_write_access(schema: str, table: str = None) -> bool:
+    """Return True if the current user has write permission for schema/table."""
+    if current_user.role == 'admin':
+        return True
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    resource_names = [schema]
+    if table:
+        resource_names.extend([table, f'{schema}.{table}'])
+    placeholders = ','.join(['?' for _ in resource_names])
+    cursor.execute(
+        f"SELECT id FROM permissions WHERE user_id = ? AND permission_level = 'write' AND resource_name IN ({placeholders})",
+        [current_user.id] + resource_names,
+    )
+    if cursor.fetchone():
+        conn.close()
+        return True
+    cursor.execute(
+        f'''SELECT gp.id FROM group_permissions gp
+            JOIN user_group_members ugm ON gp.group_id = ugm.group_id
+            WHERE ugm.user_id = ? AND gp.permission_level = 'write'
+            AND gp.resource_name IN ({placeholders})''',
+        [current_user.id] + resource_names,
+    )
+    result = cursor.fetchone()
+    conn.close()
+    return result is not None
 
 
-@app.route('/admin')
-def admin_panel():
-    """Serve the admin panel page (admin only)."""
-    # Note: Access control is done in JavaScript on page load
-    # Backend validation happens in API endpoints
-    return render_template('admin.html')
+def _find_yaml_file(schema: str):
+    """Return the absolute path of the YAML file for the given schema, or None."""
+    yaml_dir = app.config['YAML_DIRECTORY']
+    if not os.path.exists(yaml_dir):
+        return None
+    for filename in os.listdir(yaml_dir):
+        if filename.endswith(('.yml', '.yaml')):
+            schema_name = filename.replace('schema_', '').replace('.yml', '').replace('.yaml', '')
+            if schema_name == schema:
+                return os.path.join(yaml_dir, filename)
+    return None
 
 
-@app.route('/profile')
-def profile():
-    """Serve the user profile page."""
-    return render_template('profile.html')
+@app.route('/api/schemas/<schema>/tables/<table>', methods=['PATCH'])
+@login_required
+def update_table_description(schema, table):
+    """Update a table description. Thread-safe atomic write with backup."""
+    if not _check_write_access(schema, table):
+        return jsonify({'error': 'Write permission required'}), 403
+
+    req = request.get_json()
+    new_description = (req.get('description') or '').strip()
+
+    filepath = _find_yaml_file(schema)
+    if not filepath:
+        return jsonify({'error': 'Schema not found'}), 404
+
+    write_lock = _get_write_lock(filepath)
+    with write_lock:
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = yaml.safe_load(f)
+        except Exception as e:
+            return jsonify({'error': f'Failed to read schema file: {e}'}), 500
+
+        if not isinstance(content, dict) or 'models' not in content:
+            return jsonify({'error': 'Invalid YAML structure'}), 400
+
+        updated = False
+        for model in content['models']:
+            if model.get('name') == table:
+                model['description'] = new_description
+                updated = True
+                break
+
+        if not updated:
+            return jsonify({'error': 'Table not found in schema'}), 404
+
+        try:
+            _atomic_write_yaml(filepath, content)
+        except Exception as e:
+            return jsonify({'error': f'Failed to save changes: {e}'}), 500
+
+    log_activity(current_user.id, 'edit_table', 'table', f'{schema}.{table}')
+    return jsonify({'success': True, 'description': new_description})
 
 
-@app.route('/groups')
-def groups_page():
-    """Serve the groups management page (admin only)."""
-    return render_template('groups.html')
+@app.route('/api/schemas/<schema>/tables/<table>/columns/<column>', methods=['PATCH'])
+@login_required
+def update_column_description(schema, table, column):
+    """Update a column description. Thread-safe atomic write with backup."""
+    if not _check_write_access(schema, table):
+        return jsonify({'error': 'Write permission required'}), 403
+
+    req = request.get_json()
+    new_description = (req.get('description') or '').strip()
+
+    filepath = _find_yaml_file(schema)
+    if not filepath:
+        return jsonify({'error': 'Schema not found'}), 404
+
+    write_lock = _get_write_lock(filepath)
+    with write_lock:
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = yaml.safe_load(f)
+        except Exception as e:
+            return jsonify({'error': f'Failed to read schema file: {e}'}), 500
+
+        if not isinstance(content, dict) or 'models' not in content:
+            return jsonify({'error': 'Invalid YAML structure'}), 400
+
+        updated = False
+        for model in content['models']:
+            if model.get('name') == table:
+                for col in model.get('columns', []):
+                    if col.get('name') == column:
+                        col['description'] = new_description
+                        updated = True
+                        break
+                break
+
+        if not updated:
+            return jsonify({'error': 'Column not found in table'}), 404
+
+        try:
+            _atomic_write_yaml(filepath, content)
+        except Exception as e:
+            return jsonify({'error': f'Failed to save changes: {e}'}), 500
+
+    log_activity(current_user.id, 'edit_column', 'column', f'{schema}.{table}.{column}')
+    return jsonify({'success': True, 'description': new_description})
 
 
-# Add logout endpoint if not already present
-@app.route('/logout')
-def logout_page():
-    """Logout and redirect to signin."""
-    logout_user()
-    return redirect('/signin')
+# ============================================================================
+# API Endpoints - File Directory (Admin only)
+# ============================================================================
+
+@app.route('/api/admin/files', methods=['GET'])
+@role_required('admin')
+def get_files():
+    """Return the current YAML directory and a listing of its schema files."""
+    yaml_dir = app.config['YAML_DIRECTORY']
+    exists = os.path.exists(yaml_dir) and os.path.isdir(yaml_dir)
+    files = []
+
+    if exists:
+        for filename in sorted(os.listdir(yaml_dir)):
+            if not filename.endswith(('.yml', '.yaml')):
+                continue
+            filepath = os.path.join(yaml_dir, filename)
+            stat = os.stat(filepath)
+            schema_name = filename.replace('schema_', '').replace('.yml', '').replace('.yaml', '')
+            table_count = 0
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    fdata = yaml.safe_load(f)
+                    if fdata and 'models' in fdata:
+                        table_count = len(fdata['models'])
+            except Exception:
+                pass
+            files.append({
+                'name': filename,
+                'schema_name': schema_name,
+                'size': stat.st_size,
+                'modified': datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                'table_count': table_count,
+            })
+
+    return jsonify({'directory': yaml_dir, 'exists': exists, 'files': files})
+
+
+@app.route('/api/admin/files/directory', methods=['POST'])
+@role_required('admin')
+def set_files_directory():
+    """Change the YAML directory path used to populate schema data."""
+    data = request.get_json()
+    new_dir = (data.get('directory') or '').strip()
+
+    if not new_dir:
+        return jsonify({'error': 'Directory path is required'}), 400
+    if not os.path.exists(new_dir):
+        return jsonify({'error': f'Directory does not exist: {new_dir}'}), 400
+    if not os.path.isdir(new_dir):
+        return jsonify({'error': 'Path must be a directory'}), 400
+
+    app.config['YAML_DIRECTORY'] = new_dir
+
+    # Persist to .env file if present
+    env_path = '.env'
+    if os.path.exists(env_path):
+        with open(env_path, 'r') as f:
+            lines = f.readlines()
+        updated = False
+        for i, line in enumerate(lines):
+            if line.startswith('YAML_DIRECTORY='):
+                lines[i] = f'YAML_DIRECTORY={new_dir}\n'
+                updated = True
+                break
+        if not updated:
+            lines.append(f'YAML_DIRECTORY={new_dir}\n')
+        with open(env_path, 'w') as f:
+            f.writelines(lines)
+
+    log_activity(current_user.id, 'change_yaml_directory', 'config', new_dir)
+    return jsonify({'success': True, 'directory': new_dir, 'message': f'YAML directory changed to {new_dir}'})
+
+
+# ============================================================================
+# React SPA Routes — serve the built frontend for all non-API paths
+# ============================================================================
+
+REACT_BUILD_DIR = os.path.join(os.path.dirname(__file__), 'static', 'dist')
+
+
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_react(path: str):
+    """Serve the React SPA. Static assets are served directly; all other
+    paths fall back to index.html so React Router handles client-side routing."""
+    if path and os.path.exists(os.path.join(REACT_BUILD_DIR, path)):
+        return send_from_directory(REACT_BUILD_DIR, path)
+    return send_from_directory(REACT_BUILD_DIR, 'index.html')
 
 # ============================================================================
 # Main
@@ -1404,4 +1885,4 @@ def logout_page():
 
 if __name__ == '__main__':
     init_db()
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5002)
