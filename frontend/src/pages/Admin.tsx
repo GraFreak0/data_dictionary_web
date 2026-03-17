@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuthStore } from '../store/authStore'
 import {
   Users,
   UserPlus,
@@ -13,6 +14,7 @@ import {
   ToggleRight,
   Key,
   Download,
+  KeyRound,
   Database,
   Table2,
   Columns,
@@ -25,7 +27,7 @@ import { catalogService } from '../services/catalog'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
-import { Modal } from '../components/ui/Modal'
+import { Modal, ConfirmDialog } from '../components/ui/Modal'
 import { Badge, RoleBadge, StatusBadge } from '../components/ui/Badge'
 import { Select } from '../components/ui/Select'
 import { ResourceAutocomplete } from '../components/ui/ResourceAutocomplete'
@@ -259,6 +261,85 @@ function EditUserModal({
   )
 }
 
+// ─── Reset Password Modal ─────────────────────────────────────────────────────
+
+function ResetPasswordModal({
+  isOpen,
+  onClose,
+  user,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  user: User | null
+}) {
+  const [newPassword, setNewPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (isOpen) { setNewPassword(''); setConfirm(''); setError('') }
+  }, [isOpen])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user) return
+    if (newPassword.length < 8) { setError('Password must be at least 8 characters'); return }
+    if (newPassword !== confirm) { setError('Passwords do not match'); return }
+    setLoading(true)
+    try {
+      await adminService.resetUserPassword(user.id, newPassword)
+      toast.success(`Password reset for ${user.username}`)
+      onClose()
+    } catch (err: unknown) {
+      const e = err as { message?: string }
+      toast.error(e?.message ?? 'Failed to reset password')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Reset Password"
+      description={user ? `Set a new password for ${user.username}` : ''}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={loading}>Cancel</Button>
+          <Button onClick={handleSubmit} loading={loading} icon={<KeyRound size={16} />}>
+            Reset Password
+          </Button>
+        </>
+      }
+    >
+      <form className="space-y-4" onSubmit={handleSubmit}>
+        <Input
+          label="New Password"
+          name="new_password"
+          type="password"
+          value={newPassword}
+          onChange={(e) => { setNewPassword(e.target.value); setError('') }}
+          placeholder="Min 8 characters"
+          autoFocus
+        />
+        <Input
+          label="Confirm Password"
+          name="confirm_password"
+          type="password"
+          value={confirm}
+          onChange={(e) => { setConfirm(e.target.value); setError('') }}
+          placeholder="Re-enter password"
+        />
+        {error && (
+          <p className="text-sm text-red-500">{error}</p>
+        )}
+      </form>
+    </Modal>
+  )
+}
+
 // ─── Resource type metadata ───────────────────────────────────────────────────
 
 const RESOURCE_TYPES = [
@@ -338,14 +419,27 @@ function PermissionsModal({
 
   const loadBulkResources = async () => {
     setBulkLoading(true)
+    const alreadyGranted = new Set(
+      permissions
+        .filter((p) => p.resource_type === newPerm.resource_type)
+        .map((p) => p.resource_name)
+    )
     try {
       if (newPerm.resource_type === 'schema') {
         const schemas = await catalogService.getSchemas()
-        setBulkItems(schemas.map((s) => ({ name: s.name, level: 'read', selected: true })))
+        setBulkItems(
+          schemas
+            .filter((s) => !alreadyGranted.has(s.name))
+            .map((s) => ({ name: s.name, level: 'read', selected: true }))
+        )
       } else if (newPerm.resource_type === 'table') {
         if (!bulkSchema) { toast.error('Select a schema first'); setBulkLoading(false); return }
         const tables = await catalogService.getSchemaTables(bulkSchema)
-        setBulkItems(tables.map((t) => ({ name: t.name, level: 'read', selected: true })))
+        setBulkItems(
+          tables
+            .filter((t) => !alreadyGranted.has(t.name))
+            .map((t) => ({ name: t.name, level: 'read', selected: true }))
+        )
       } else if (newPerm.resource_type === 'column') {
         if (!bulkSchema) { toast.error('Select a schema first'); setBulkLoading(false); return }
         const tables = await catalogService.getSchemaTables(bulkSchema)
@@ -353,7 +447,9 @@ function PermissionsModal({
         for (const t of tables) {
           const detail = await catalogService.getTableDetail(bulkSchema, t.name)
           for (const col of detail.columns ?? []) {
-            allCols.push({ name: col.name, level: 'read', selected: true })
+            if (!alreadyGranted.has(col.name)) {
+              allCols.push({ name: col.name, level: 'read', selected: true })
+            }
           }
         }
         setBulkItems(allCols)
@@ -590,6 +686,9 @@ function PermissionsModal({
                   onChange={(v) => setNewPerm((p) => ({ ...p, resource_name: v }))}
                   resourceType={newPerm.resource_type}
                   placeholder={`Search or type a ${newPerm.resource_type} name…`}
+                  excludeValues={permissions
+                    .filter((p) => p.resource_type === newPerm.resource_type)
+                    .map((p) => p.resource_name)}
                 />
               </div>
 
@@ -766,6 +865,7 @@ function QuickCreateGroupModal({
 // ─── Users Tab ────────────────────────────────────────────────────────────────
 
 function UsersTab() {
+  const { user: currentUser } = useAuthStore()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -773,6 +873,9 @@ function UsersTab() {
   const [showCreateGroup, setShowCreateGroup] = useState(false)
   const [editUser, setEditUser] = useState<User | null>(null)
   const [permUser, setPermUser] = useState<User | null>(null)
+  const [resetUser, setResetUser] = useState<User | null>(null)
+  const [deleteUser, setDeleteUser] = useState<User | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const loadUsers = useCallback(async () => {
     setLoading(true)
@@ -785,6 +888,22 @@ function UsersTab() {
       setLoading(false)
     }
   }, [])
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteUser) return
+    setDeleting(true)
+    try {
+      await adminService.deleteUser(deleteUser.id)
+      setUsers((prev) => prev.filter((u) => u.id !== deleteUser.id))
+      toast.success(`User "${deleteUser.username}" deleted`)
+      setDeleteUser(null)
+    } catch (err: unknown) {
+      const e = err as { message?: string }
+      toast.error(e?.message ?? 'Failed to delete user')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   useEffect(() => { loadUsers() }, [loadUsers])
 
@@ -877,10 +996,27 @@ function UsersTab() {
                       <Button
                         variant="ghost"
                         size="icon"
+                        icon={<KeyRound size={14} />}
+                        onClick={() => setResetUser(u)}
+                        title="Reset password"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         icon={<Pencil size={14} />}
                         onClick={() => setEditUser(u)}
                         title="Edit user"
                       />
+                      {u.id !== currentUser?.id && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          icon={<Trash2 size={14} />}
+                          onClick={() => setDeleteUser(u)}
+                          title="Delete user"
+                          className="text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        />
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -911,6 +1047,20 @@ function UsersTab() {
         isOpen={!!permUser}
         onClose={() => setPermUser(null)}
         user={permUser}
+      />
+      <ResetPasswordModal
+        isOpen={!!resetUser}
+        onClose={() => setResetUser(null)}
+        user={resetUser}
+      />
+      <ConfirmDialog
+        isOpen={!!deleteUser}
+        onClose={() => setDeleteUser(null)}
+        onConfirm={handleDeleteConfirm}
+        title="Delete User"
+        message={`Are you sure you want to delete "${deleteUser?.username}"? This will also remove all their permissions. This action cannot be undone.`}
+        confirmLabel="Delete User"
+        loading={deleting}
       />
     </div>
   )

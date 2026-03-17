@@ -14,6 +14,7 @@ interface ResourceAutocompleteProps {
   resourceType: 'schema' | 'table' | 'column' | string
   placeholder?: string
   disabled?: boolean
+  excludeValues?: string[]
 }
 
 // Module-level cache so repeated modal opens don't re-fetch
@@ -25,6 +26,7 @@ export function ResourceAutocomplete({
   resourceType,
   placeholder,
   disabled,
+  excludeValues,
 }: ResourceAutocompleteProps) {
   const [allOptions, setAllOptions] = useState<Suggestion[]>([])
   const [filtered, setFiltered] = useState<Suggestion[]>([])
@@ -107,14 +109,16 @@ export function ResourceAutocomplete({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resourceType])
 
-  // Filter suggestions whenever value or options change
+  // Filter suggestions whenever value, options, or excluded set changes
   useEffect(() => {
+    const excluded = new Set(excludeValues ?? [])
+    const available = allOptions.filter((o) => !excluded.has(o.value))
     const q = value.trim().toLowerCase()
     if (!q) {
-      setFiltered(allOptions.slice(0, 12))
+      setFiltered(available.slice(0, 12))
     } else {
       setFiltered(
-        allOptions
+        available
           .filter(
             (o) =>
               o.value.toLowerCase().includes(q) ||
@@ -123,7 +127,7 @@ export function ResourceAutocomplete({
           .slice(0, 12)
       )
     }
-  }, [value, allOptions])
+  }, [value, allOptions, excludeValues])
 
   // Close dropdown when clicking outside
   useEffect(() => {

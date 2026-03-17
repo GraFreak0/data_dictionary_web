@@ -32,6 +32,14 @@ export const adminService = {
     return res.data
   },
 
+  async deleteUser(userId: number): Promise<void> {
+    await api.delete(`/api/admin/users/${userId}`)
+  },
+
+  async resetUserPassword(userId: number, newPassword: string): Promise<void> {
+    await api.post(`/api/admin/users/${userId}/reset-password`, { new_password: newPassword })
+  },
+
   async getUserPermissions(userId: number): Promise<Permission[]> {
     // Backend: { permissions: [...] }
     const res = await api.get<{ permissions: Permission[] }>(

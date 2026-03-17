@@ -652,7 +652,7 @@ def get_table_details(schema: str, table: str, user_id: int) -> Optional[Dict[st
             if model.get('name') == table:
                 return {
                     'schema': schema,
-                    'table': table,
+                    'name': table,
                     'description': model.get('description', ''),
                     'meta': model.get('meta', {}),
                     'columns': model.get('columns', [])
@@ -1451,6 +1451,58 @@ def grant_permission(user_id):
         'resource_name': resource_name,
         'permission_level': permission_level
     }), 201
+
+
+@app.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
+@role_required('admin')
+def delete_user(user_id):
+    """Delete a user (admin only). Cannot delete yourself."""
+    if user_id == current_user.id:
+        return jsonify({'error': 'Cannot delete your own account'}), 400
+
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    cursor.execute('SELECT id FROM users WHERE id = ?', (user_id,))
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({'error': 'User not found'}), 404
+
+    # Remove related data first
+    cursor.execute('DELETE FROM permissions WHERE user_id = ?', (user_id,))
+    cursor.execute('DELETE FROM user_group_members WHERE user_id = ?', (user_id,))
+    cursor.execute('DELETE FROM users WHERE id = ?', (user_id,))
+    conn.commit()
+    conn.close()
+
+    log_activity(current_user.id, 'delete_user', 'user', str(user_id))
+    return jsonify({'success': True})
+
+
+@app.route('/api/admin/users/<int:user_id>/reset-password', methods=['POST'])
+@role_required('admin')
+def admin_reset_password(user_id):
+    """Admin sets a new password for any user."""
+    data = request.get_json()
+    new_password = data.get('new_password', '')
+
+    if len(new_password) < 8:
+        return jsonify({'error': 'Password must be at least 8 characters'}), 400
+
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    cursor.execute('SELECT id, username FROM users WHERE id = ?', (user_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'error': 'User not found'}), 404
+
+    new_hash = generate_password_hash(new_password)
+    cursor.execute('UPDATE users SET password_hash = ? WHERE id = ?', (new_hash, user_id))
+    conn.commit()
+    conn.close()
+
+    log_activity(current_user.id, 'admin_reset_password', 'user', row[1])
+    return jsonify({'success': True, 'message': f'Password reset for {row[1]}'})
 
 
 @app.route('/api/admin/permissions/<int:permission_id>', methods=['DELETE'])
