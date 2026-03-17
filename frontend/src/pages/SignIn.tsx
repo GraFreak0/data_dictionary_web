@@ -138,29 +138,28 @@ export function SignIn() {
           </div>
 
           {/* Two sign-in buttons */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-3">
             {/* Normal sign in — always goes to Dashboard */}
             <button
               type="button"
               disabled={loading}
               onClick={() => handleSubmit('dashboard')}
-              className={`flex flex-col items-center gap-2 rounded-xl border-2 px-3 py-4 text-center transition-all focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2
+              className={`flex w-full items-center gap-3 rounded-xl border-2 px-4 py-3.5 transition-all focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2
                 ${loading && pendingDest === 'dashboard'
                   ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 opacity-80'
                   : 'border-[var(--border-color)] hover:border-primary-400 hover:bg-primary-50/50 dark:hover:bg-primary-900/10'
                 }
                 disabled:opacity-60 disabled:cursor-not-allowed`}
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-100 dark:bg-primary-900/40">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-100 dark:bg-primary-900/40">
                 {loading && pendingDest === 'dashboard' ? (
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-600 border-t-transparent" />
                 ) : (
                   <LayoutDashboard size={18} className="text-primary-600 dark:text-primary-400" />
                 )}
               </div>
-              <div>
+              <div className="flex-1 text-center">
                 <p className="text-sm font-semibold text-[var(--text-primary)]">Sign In</p>
-                <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Go to Dashboard</p>
               </div>
             </button>
 
@@ -169,23 +168,22 @@ export function SignIn() {
               type="button"
               disabled={loading}
               onClick={() => handleSubmit('admin')}
-              className={`flex flex-col items-center gap-2 rounded-xl border-2 px-3 py-4 text-center transition-all focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2
+              className={`flex w-full items-center gap-3 rounded-xl border-2 px-4 py-3.5 transition-all focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2
                 ${loading && pendingDest === 'admin'
                   ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 opacity-80'
                   : 'border-[var(--border-color)] hover:border-purple-400 hover:bg-purple-50/50 dark:hover:bg-purple-900/10'
                 }
                 disabled:opacity-60 disabled:cursor-not-allowed`}
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/40">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/40">
                 {loading && pendingDest === 'admin' ? (
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-purple-600 border-t-transparent" />
                 ) : (
                   <Shield size={18} className="text-purple-600 dark:text-purple-400" />
                 )}
               </div>
-              <div>
+              <div className="flex-1 text-center">
                 <p className="text-sm font-semibold text-[var(--text-primary)]">Sign In as Admin</p>
-                <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Go to Admin Panel</p>
               </div>
             </button>
           </div>

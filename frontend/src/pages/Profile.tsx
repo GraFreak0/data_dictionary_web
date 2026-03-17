@@ -157,35 +157,35 @@ function ActivityTable({ logs }: { logs: ActivityLog[] }) {
 
   return (
     <div className="table-container">
-      <table className="data-table">
+      <table className="data-table table-fixed w-full">
         <thead>
           <tr>
-            <th>Action</th>
-            <th>Resource</th>
-            <th>Time</th>
-            <th>IP Address</th>
+            <th className="w-[28%]">Action</th>
+            <th className="w-[38%]">Resource</th>
+            <th className="w-[22%]">Time</th>
+            <th className="w-[12%]">IP Address</th>
           </tr>
         </thead>
         <tbody>
           {logs.map((log) => (
             <tr key={log.id}>
-              <td>
-                <Badge variant="default">{log.action}</Badge>
+              <td className="align-top">
+                <Badge variant="default" className="whitespace-normal break-words">{log.action}</Badge>
               </td>
-              <td>
-                <div>
-                  <p className="text-sm font-medium text-[var(--text-primary)]">{log.resource_name}</p>
+              <td className="align-top">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-[var(--text-primary)] break-all">{log.resource_name}</p>
                   <p className="text-xs text-[var(--text-muted)]">{log.resource_type}</p>
                 </div>
               </td>
-              <td>
+              <td className="align-top">
                 <div>
                   <p className="text-sm">{formatRelativeTime(log.timestamp)}</p>
                   <p className="text-xs text-[var(--text-muted)]">{formatDate(log.timestamp)}</p>
                 </div>
               </td>
-              <td>
-                <code className="text-xs font-mono">{log.ip_address || '—'}</code>
+              <td className="align-top">
+                <code className="text-xs font-mono break-all">{log.ip_address || '—'}</code>
               </td>
             </tr>
           ))}

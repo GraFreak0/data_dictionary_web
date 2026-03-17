@@ -72,6 +72,29 @@ export const adminService = {
     return res.data.logs ?? []
   },
 
+  async exportActivityLogs(filters: {
+    user_ids?: number[]
+    actions?: string[]
+    resource_types?: string[]
+    resource_name?: string
+    date_from?: string
+    date_to?: string
+  }): Promise<void> {
+    const res = await api.post('/api/admin/activity/export', filters, {
+      responseType: 'blob',
+    })
+    const blob = new Blob([res.data], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    const ts = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '_')
+    link.download = `activity_log_${ts}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  },
+
   // ── Groups ────────────────────────────────────────────────────────────────
 
   async getGroups(): Promise<Group[]> {
