@@ -143,3 +143,4 @@ config.json
 secrets.yaml
 secrets.json
 dbt_models/
+data_dictionary.db

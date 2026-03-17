@@ -8,6 +8,9 @@ import { Dashboard } from './pages/Dashboard'
 import { Profile } from './pages/Profile'
 import { Admin } from './pages/Admin'
 import { Groups } from './pages/Groups'
+import { SchemaBrowser } from './pages/SchemaBrowser'
+import { Analytics } from './pages/Analytics'
+import { Files } from './pages/Files'
 
 function LoadingScreen() {
   return (
@@ -94,8 +97,11 @@ export default function App() {
         <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/schemas" element={<SchemaBrowser />} />
+          <Route path="/analytics" element={<Analytics />} />
           <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
           <Route path="/groups" element={<AdminRoute><Groups /></AdminRoute>} />
+          <Route path="/files" element={<AdminRoute><Files /></AdminRoute>} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -1237,9 +1237,18 @@ def create_user():
         user_id = cursor.lastrowid
         
         log_activity(current_user.id, 'create_user', 'user', username)
-        
+
         conn.close()
-        return jsonify({'success': True, 'user_id': user_id}), 201
+        return jsonify({
+            'id': user_id,
+            'username': username,
+            'email': email,
+            'role': role,
+            'can_export': bool(can_export),
+            'is_active': True,
+            'created_at': datetime.now().isoformat(),
+            'last_login': None,
+        }), 201
     except sqlite3.IntegrityError:
         conn.close()
         return jsonify({'error': 'Username or email already exists'}), 409
@@ -1399,6 +1408,305 @@ def get_activity_logs():
         })
     conn.close()
     return jsonify({'logs': logs})
+
+
+# ============================================================================
+# API Endpoints - Current User Permissions
+# ============================================================================
+
+@app.route('/api/me/permissions', methods=['GET'])
+@login_required
+def get_my_permissions():
+    """Get permissions for the currently authenticated user (individual + group)."""
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT id, resource_type, resource_name, permission_level
+        FROM permissions WHERE user_id = ?
+    ''', (current_user.id,))
+    permissions = [
+        {'id': r[0], 'resource_type': r[1], 'resource_name': r[2], 'permission_level': r[3]}
+        for r in cursor.fetchall()
+    ]
+
+    cursor.execute('''
+        SELECT gp.id, gp.resource_type, gp.resource_name, gp.permission_level
+        FROM group_permissions gp
+        JOIN user_group_members ugm ON gp.group_id = ugm.group_id
+        WHERE ugm.user_id = ?
+    ''', (current_user.id,))
+    for r in cursor.fetchall():
+        permissions.append({
+            'id': r[0], 'resource_type': r[1], 'resource_name': r[2],
+            'permission_level': r[3], 'from_group': True
+        })
+
+    conn.close()
+    is_admin = current_user.role == 'admin'
+    return jsonify({'permissions': permissions, 'is_admin': is_admin})
+
+
+# ============================================================================
+# API Endpoints - Analytics
+# ============================================================================
+
+@app.route('/api/analytics', methods=['GET'])
+@login_required
+def get_analytics():
+    """Return analytics data for accessible schemas."""
+    yaml_data = load_yaml_files()
+    schemas_out = []
+    all_data_types: Dict[str, int] = {}
+
+    for filename, data in yaml_data.items():
+        schema_name = filename.replace('schema_', '').replace('.yml', '').replace('.yaml', '')
+        if not check_resource_access(current_user.id, 'database', schema_name):
+            continue
+        if not data or 'models' not in data:
+            continue
+
+        tables = []
+        schema_col_count = 0
+        for model in data.get('models', []):
+            cols = model.get('columns', [])
+            col_count = len(cols)
+            schema_col_count += col_count
+            tables.append({
+                'name': model.get('name', ''),
+                'column_count': col_count,
+                'description': model.get('description', '') or '',
+            })
+            for col in cols:
+                dtype = (col.get('data_type') or 'unknown').lower()
+                if 'int' in dtype:
+                    key = 'integer'
+                elif any(x in dtype for x in ('varchar', 'char', 'text', 'string')):
+                    key = 'string'
+                elif any(x in dtype for x in ('timestamp', 'date', 'time')):
+                    key = 'datetime'
+                elif 'bool' in dtype:
+                    key = 'boolean'
+                elif any(x in dtype for x in ('float', 'double', 'decimal', 'numeric', 'number')):
+                    key = 'numeric'
+                else:
+                    key = dtype if dtype else 'unknown'
+                all_data_types[key] = all_data_types.get(key, 0) + 1
+
+        schemas_out.append({
+            'name': schema_name,
+            'table_count': len(tables),
+            'column_count': schema_col_count,
+            'tables': sorted(tables, key=lambda t: t['column_count'], reverse=True),
+        })
+
+    schemas_out.sort(key=lambda s: s['table_count'], reverse=True)
+    return jsonify({
+        'schemas': schemas_out,
+        'data_types': all_data_types,
+        'totals': {
+            'schemas': len(schemas_out),
+            'tables': sum(s['table_count'] for s in schemas_out),
+            'columns': sum(s['column_count'] for s in schemas_out),
+        },
+    })
+
+
+# ============================================================================
+# API Endpoints - Metadata Editing
+# ============================================================================
+
+def _check_write_access(schema: str, table: str = None) -> bool:
+    """Return True if the current user has write permission for schema/table."""
+    if current_user.role == 'admin':
+        return True
+    conn = sqlite3.connect(app.config['DATABASE'])
+    cursor = conn.cursor()
+    resource_names = [schema]
+    if table:
+        resource_names.extend([table, f'{schema}.{table}'])
+    placeholders = ','.join(['?' for _ in resource_names])
+    cursor.execute(
+        f"SELECT id FROM permissions WHERE user_id = ? AND permission_level = 'write' AND resource_name IN ({placeholders})",
+        [current_user.id] + resource_names,
+    )
+    if cursor.fetchone():
+        conn.close()
+        return True
+    cursor.execute(
+        f'''SELECT gp.id FROM group_permissions gp
+            JOIN user_group_members ugm ON gp.group_id = ugm.group_id
+            WHERE ugm.user_id = ? AND gp.permission_level = 'write'
+            AND gp.resource_name IN ({placeholders})''',
+        [current_user.id] + resource_names,
+    )
+    result = cursor.fetchone()
+    conn.close()
+    return result is not None
+
+
+def _find_yaml_file(schema: str):
+    """Return the absolute path of the YAML file for the given schema, or None."""
+    yaml_dir = app.config['YAML_DIRECTORY']
+    if not os.path.exists(yaml_dir):
+        return None
+    for filename in os.listdir(yaml_dir):
+        if filename.endswith(('.yml', '.yaml')):
+            schema_name = filename.replace('schema_', '').replace('.yml', '').replace('.yaml', '')
+            if schema_name == schema:
+                return os.path.join(yaml_dir, filename)
+    return None
+
+
+@app.route('/api/schemas/<schema>/tables/<table>', methods=['PATCH'])
+@login_required
+def update_table_description(schema, table):
+    """Update a table's description. Requires write permission on the schema or table."""
+    if not _check_write_access(schema, table):
+        return jsonify({'error': 'Write permission required'}), 403
+
+    data = request.get_json()
+    new_description = data.get('description', '')
+
+    filepath = _find_yaml_file(schema)
+    if not filepath:
+        return jsonify({'error': 'Schema not found'}), 404
+
+    with open(filepath, 'r', encoding='utf-8') as f:
+        content = yaml.safe_load(f)
+
+    if not content or 'models' not in content:
+        return jsonify({'error': 'Invalid YAML structure'}), 400
+
+    updated = False
+    for model in content['models']:
+        if model.get('name') == table:
+            model['description'] = new_description
+            updated = True
+            break
+
+    if not updated:
+        return jsonify({'error': 'Table not found'}), 404
+
+    with open(filepath, 'w', encoding='utf-8') as f:
+        yaml.dump(content, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+    log_activity(current_user.id, 'edit_table', 'table', f'{schema}.{table}')
+    return jsonify({'success': True, 'description': new_description})
+
+
+@app.route('/api/schemas/<schema>/tables/<table>/columns/<column>', methods=['PATCH'])
+@login_required
+def update_column_description(schema, table, column):
+    """Update a column's description. Requires write permission on the schema or table."""
+    if not _check_write_access(schema, table):
+        return jsonify({'error': 'Write permission required'}), 403
+
+    data = request.get_json()
+    new_description = data.get('description', '')
+
+    filepath = _find_yaml_file(schema)
+    if not filepath:
+        return jsonify({'error': 'Schema not found'}), 404
+
+    with open(filepath, 'r', encoding='utf-8') as f:
+        content = yaml.safe_load(f)
+
+    if not content or 'models' not in content:
+        return jsonify({'error': 'Invalid YAML structure'}), 400
+
+    updated = False
+    for model in content['models']:
+        if model.get('name') == table:
+            for col in model.get('columns', []):
+                if col.get('name') == column:
+                    col['description'] = new_description
+                    updated = True
+                    break
+            break
+
+    if not updated:
+        return jsonify({'error': 'Column not found'}), 404
+
+    with open(filepath, 'w', encoding='utf-8') as f:
+        yaml.dump(content, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+    log_activity(current_user.id, 'edit_column', 'column', f'{schema}.{table}.{column}')
+    return jsonify({'success': True, 'description': new_description})
+
+
+# ============================================================================
+# API Endpoints - File Directory (Admin only)
+# ============================================================================
+
+@app.route('/api/admin/files', methods=['GET'])
+@role_required('admin')
+def get_files():
+    """Return the current YAML directory and a listing of its schema files."""
+    yaml_dir = app.config['YAML_DIRECTORY']
+    exists = os.path.exists(yaml_dir) and os.path.isdir(yaml_dir)
+    files = []
+
+    if exists:
+        for filename in sorted(os.listdir(yaml_dir)):
+            if not filename.endswith(('.yml', '.yaml')):
+                continue
+            filepath = os.path.join(yaml_dir, filename)
+            stat = os.stat(filepath)
+            schema_name = filename.replace('schema_', '').replace('.yml', '').replace('.yaml', '')
+            table_count = 0
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    fdata = yaml.safe_load(f)
+                    if fdata and 'models' in fdata:
+                        table_count = len(fdata['models'])
+            except Exception:
+                pass
+            files.append({
+                'name': filename,
+                'schema_name': schema_name,
+                'size': stat.st_size,
+                'modified': datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                'table_count': table_count,
+            })
+
+    return jsonify({'directory': yaml_dir, 'exists': exists, 'files': files})
+
+
+@app.route('/api/admin/files/directory', methods=['POST'])
+@role_required('admin')
+def set_files_directory():
+    """Change the YAML directory path used to populate schema data."""
+    data = request.get_json()
+    new_dir = (data.get('directory') or '').strip()
+
+    if not new_dir:
+        return jsonify({'error': 'Directory path is required'}), 400
+    if not os.path.exists(new_dir):
+        return jsonify({'error': f'Directory does not exist: {new_dir}'}), 400
+    if not os.path.isdir(new_dir):
+        return jsonify({'error': 'Path must be a directory'}), 400
+
+    app.config['YAML_DIRECTORY'] = new_dir
+
+    # Persist to .env file if present
+    env_path = '.env'
+    if os.path.exists(env_path):
+        with open(env_path, 'r') as f:
+            lines = f.readlines()
+        updated = False
+        for i, line in enumerate(lines):
+            if line.startswith('YAML_DIRECTORY='):
+                lines[i] = f'YAML_DIRECTORY={new_dir}\n'
+                updated = True
+                break
+        if not updated:
+            lines.append(f'YAML_DIRECTORY={new_dir}\n')
+        with open(env_path, 'w') as f:
+            f.writelines(lines)
+
+    log_activity(current_user.id, 'change_yaml_directory', 'config', new_dir)
+    return jsonify({'success': True, 'directory': new_dir, 'message': f'YAML directory changed to {new_dir}'})
 
 
 # ============================================================================

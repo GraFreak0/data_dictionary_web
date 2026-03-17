@@ -9,6 +9,7 @@ import type {
   UpdateUserPayload,
   CreateGroupPayload,
   CreatePermissionPayload,
+  FilesConfig,
 } from '../types'
 
 export const adminService = {
@@ -124,5 +125,22 @@ export const adminService = {
 
   async deleteGroupPermission(groupId: number, permissionId: number): Promise<void> {
     await api.delete(`/api/groups/${groupId}/permissions/${permissionId}`)
+  },
+
+  // ── File Directory ────────────────────────────────────────────────────────
+
+  async getFiles(): Promise<FilesConfig> {
+    const res = await api.get<FilesConfig>('/api/admin/files')
+    return res.data
+  },
+
+  async setFilesDirectory(
+    directory: string
+  ): Promise<{ success: boolean; directory: string; message: string }> {
+    const res = await api.post<{ success: boolean; directory: string; message: string }>(
+      '/api/admin/files/directory',
+      { directory }
+    )
+    return res.data
   },
 }

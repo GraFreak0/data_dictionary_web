@@ -11,6 +11,8 @@ import {
   Moon,
   ChevronRight,
   BookOpen,
+  BarChart2,
+  FolderOpen,
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 import { useTheme } from '../../hooks/useTheme'
@@ -27,9 +29,12 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { to: '/', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
+  { to: '/schemas', icon: <Database size={18} />, label: 'Schema Browser' },
+  { to: '/analytics', icon: <BarChart2 size={18} />, label: 'Analytics' },
   { to: '/profile', icon: <UserCircle size={18} />, label: 'Profile' },
   { to: '/admin', icon: <Shield size={18} />, label: 'Admin', adminOnly: true },
   { to: '/groups', icon: <Users size={18} />, label: 'Groups', adminOnly: true },
+  { to: '/files', icon: <FolderOpen size={18} />, label: 'Files', adminOnly: true },
 ]
 
 export function Sidebar() {

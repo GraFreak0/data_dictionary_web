@@ -1,5 +1,5 @@
 import api from './api'
-import type { Schema, Table, SearchResult, Stats, ExportFormat } from '../types'
+import type { Schema, Table, SearchResult, Stats, ExportFormat, Permission, AnalyticsData } from '../types'
 
 export const catalogService = {
   async getStats(): Promise<Stats> {
@@ -80,6 +80,35 @@ export const catalogService = {
       responseType: 'blob',
     })
     return response.data as Blob
+  },
+
+  async getMyPermissions(): Promise<{ permissions: Permission[]; is_admin: boolean }> {
+    const res = await api.get<{ permissions: Permission[]; is_admin: boolean }>('/api/me/permissions')
+    return res.data
+  },
+
+  async getAnalytics(): Promise<AnalyticsData> {
+    const res = await api.get<AnalyticsData>('/api/analytics')
+    return res.data
+  },
+
+  async updateTableDescription(schema: string, table: string, description: string): Promise<void> {
+    await api.patch(
+      `/api/schemas/${encodeURIComponent(schema)}/tables/${encodeURIComponent(table)}`,
+      { description }
+    )
+  },
+
+  async updateColumnDescription(
+    schema: string,
+    table: string,
+    column: string,
+    description: string
+  ): Promise<void> {
+    await api.patch(
+      `/api/schemas/${encodeURIComponent(schema)}/tables/${encodeURIComponent(table)}/columns/${encodeURIComponent(column)}`,
+      { description }
+    )
   },
 
   downloadBlob(blob: Blob, filename: string): void {

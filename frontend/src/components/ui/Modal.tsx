@@ -70,14 +70,14 @@ export function Modal({
     >
       <div
         className={cn(
-          'relative w-full rounded-2xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-modal animate-slide-in',
+          'relative w-full rounded-2xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-modal animate-slide-in flex flex-col max-h-[90vh]',
           sizeClasses[size],
           className
         )}
       >
         {/* Header */}
         {(title || closable) && (
-          <div className="flex items-start justify-between p-6 border-b border-[var(--border-color)]">
+          <div className="flex items-start justify-between p-6 border-b border-[var(--border-color)] shrink-0">
             <div>
               {title && (
                 <h2 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h2>
@@ -97,12 +97,12 @@ export function Modal({
           </div>
         )}
 
-        {/* Body */}
-        <div className="p-6">{children}</div>
+        {/* Body — scrollable */}
+        <div className="overflow-y-auto flex-1 p-6">{children}</div>
 
         {/* Footer */}
         {footer && (
-          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[var(--border-color)] bg-[var(--bg-secondary)] rounded-b-2xl">
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[var(--border-color)] bg-[var(--bg-secondary)] rounded-b-2xl shrink-0">
             {footer}
           </div>
         )}

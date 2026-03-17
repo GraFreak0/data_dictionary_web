@@ -151,3 +151,36 @@ export interface CreatePermissionPayload {
 }
 
 export type ThemeMode = 'light' | 'dark'
+
+export interface AnalyticsTable {
+  name: string
+  column_count: number
+  description: string
+}
+
+export interface AnalyticsSchema {
+  name: string
+  table_count: number
+  column_count: number
+  tables: AnalyticsTable[]
+}
+
+export interface AnalyticsData {
+  schemas: AnalyticsSchema[]
+  data_types: Record<string, number>
+  totals: { schemas: number; tables: number; columns: number }
+}
+
+export interface FileInfo {
+  name: string
+  schema_name: string
+  size: number
+  modified: string
+  table_count: number
+}
+
+export interface FilesConfig {
+  directory: string
+  exists: boolean
+  files: FileInfo[]
+}

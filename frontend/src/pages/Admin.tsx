@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Users,
   UserPlus,
@@ -15,8 +16,12 @@ import {
   Database,
   Table2,
   Columns,
+  List,
+  CheckSquare,
+  Square,
 } from 'lucide-react'
 import { adminService } from '../services/admin'
+import { catalogService } from '../services/catalog'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -26,7 +31,7 @@ import { Select } from '../components/ui/Select'
 import { ResourceAutocomplete } from '../components/ui/ResourceAutocomplete'
 import { formatDate, formatRelativeTime, getInitials } from '../utils/format'
 import toast from 'react-hot-toast'
-import type { User, Permission, ActivityLog, CreateUserPayload } from '../types'
+import type { User, Permission, ActivityLog, CreateUserPayload, Schema, Table } from '../types'
 
 // ─── Create User Modal ──────────────────────────────────────────────────────
 
@@ -269,6 +274,12 @@ const ACCESS_LEVELS = [
 
 // ─── Permissions Modal ────────────────────────────────────────────────────────
 
+interface BulkItem {
+  name: string
+  level: 'read' | 'write'
+  selected: boolean
+}
+
 function PermissionsModal({
   isOpen,
   onClose,
@@ -288,6 +299,14 @@ function PermissionsModal({
   const [adding, setAdding] = useState(false)
   const [deleting, setDeleting] = useState<number | null>(null)
 
+  // ── Bulk mode ──
+  const [bulkMode, setBulkMode] = useState(false)
+  const [bulkItems, setBulkItems] = useState<BulkItem[]>([])
+  const [bulkLoading, setBulkLoading] = useState(false)
+  const [bulkSchema, setBulkSchema] = useState('')
+  const [bulkSchemas, setBulkSchemas] = useState<Schema[]>([])
+  const [bulkTables, setBulkTables] = useState<Table[]>([])
+
   useEffect(() => {
     if (isOpen && user) {
       setLoading(true)
@@ -298,8 +317,76 @@ function PermissionsModal({
         .finally(() => setLoading(false))
     } else {
       setPermissions([])
+      setBulkMode(false)
+      setBulkItems([])
     }
   }, [isOpen, user])
+
+  // Load schemas for bulk schema/table selectors
+  useEffect(() => {
+    if (bulkMode && (newPerm.resource_type === 'table' || newPerm.resource_type === 'column')) {
+      catalogService.getSchemas().then(setBulkSchemas).catch(() => {})
+    }
+  }, [bulkMode, newPerm.resource_type])
+
+  // Load tables when bulk schema selected
+  useEffect(() => {
+    if (bulkMode && bulkSchema && newPerm.resource_type === 'table') {
+      catalogService.getSchemaTables(bulkSchema).then(setBulkTables).catch(() => {})
+    }
+  }, [bulkMode, bulkSchema, newPerm.resource_type])
+
+  const loadBulkResources = async () => {
+    setBulkLoading(true)
+    try {
+      if (newPerm.resource_type === 'schema') {
+        const schemas = await catalogService.getSchemas()
+        setBulkItems(schemas.map((s) => ({ name: s.name, level: 'read', selected: true })))
+      } else if (newPerm.resource_type === 'table') {
+        if (!bulkSchema) { toast.error('Select a schema first'); setBulkLoading(false); return }
+        const tables = await catalogService.getSchemaTables(bulkSchema)
+        setBulkItems(tables.map((t) => ({ name: t.name, level: 'read', selected: true })))
+      } else if (newPerm.resource_type === 'column') {
+        if (!bulkSchema) { toast.error('Select a schema first'); setBulkLoading(false); return }
+        const tables = await catalogService.getSchemaTables(bulkSchema)
+        const allCols: BulkItem[] = []
+        for (const t of tables) {
+          const detail = await catalogService.getTableDetail(bulkSchema, t.name)
+          for (const col of detail.columns ?? []) {
+            allCols.push({ name: col.name, level: 'read', selected: true })
+          }
+        }
+        setBulkItems(allCols)
+      }
+    } finally {
+      setBulkLoading(false)
+    }
+  }
+
+  const toggleAll = (selected: boolean) => setBulkItems((prev) => prev.map((i) => ({ ...i, selected })))
+
+  const handleGrantAll = async () => {
+    if (!user) return
+    const toGrant = bulkItems.filter((i) => i.selected)
+    if (toGrant.length === 0) { toast.error('No resources selected'); return }
+    setAdding(true)
+    let successCount = 0
+    for (const item of toGrant) {
+      try {
+        const perm = await adminService.addUserPermission(user.id, {
+          resource_type: newPerm.resource_type,
+          resource_name: item.name,
+          permission_level: item.level,
+        })
+        setPermissions((prev) => [...prev, perm])
+        successCount++
+      } catch { /* skip duplicates silently */ }
+    }
+    toast.success(`Granted ${successCount} permission${successCount !== 1 ? 's' : ''}`)
+    setBulkItems([])
+    setBulkMode(false)
+    setAdding(false)
+  }
 
   const handleAdd = async () => {
     if (!user || !newPerm.resource_name.trim()) {
@@ -335,6 +422,7 @@ function PermissionsModal({
 
   const selectedType = RESOURCE_TYPES.find((t) => t.value === newPerm.resource_type)
   const selectedLevel = ACCESS_LEVELS.find((l) => l.value === newPerm.permission_level)
+  const selectedCount = bulkItems.filter((i) => i.selected).length
 
   return (
     <Modal
@@ -347,7 +435,21 @@ function PermissionsModal({
       <div className="space-y-6">
         {/* ── Add new permission ── */}
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-4 space-y-4">
-          <p className="text-sm font-semibold text-[var(--text-primary)]">Grant New Permission</p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-[var(--text-primary)]">Grant Permission</p>
+            <button
+              type="button"
+              onClick={() => { setBulkMode((v) => !v); setBulkItems([]) }}
+              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all ${
+                bulkMode
+                  ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
+                  : 'border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--bg-primary)]'
+              }`}
+            >
+              <List size={12} />
+              {bulkMode ? 'Single Mode' : 'Bulk Mode'}
+            </button>
+          </div>
 
           {/* Resource type selector */}
           <div>
@@ -357,11 +459,11 @@ function PermissionsModal({
                 <button
                   key={rt.value}
                   type="button"
-                  onClick={() => setNewPerm((p) => ({ ...p, resource_type: rt.value }))}
+                  onClick={() => { setNewPerm((p) => ({ ...p, resource_type: rt.value, resource_name: '' })); setBulkItems([]) }}
                   className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-all ${
                     newPerm.resource_type === rt.value
                       ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
-                      : 'border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--border-color-hover,var(--border-color))] hover:bg-[var(--bg-primary)]'
+                      : 'border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--bg-primary)]'
                   }`}
                 >
                   {rt.icon}
@@ -371,73 +473,170 @@ function PermissionsModal({
             </div>
           </div>
 
-          {/* Resource name with autocomplete */}
-          <div>
-            <label className="label mb-1.5 block">
-              {selectedType?.label ?? 'Resource'} Name
-            </label>
-            <ResourceAutocomplete
-              value={newPerm.resource_name}
-              onChange={(v) => setNewPerm((p) => ({ ...p, resource_name: v }))}
-              resourceType={newPerm.resource_type}
-              placeholder={`Search or type a ${newPerm.resource_type} name…`}
-            />
-          </div>
-
-          {/* Access level */}
-          <div>
-            <label className="label mb-2 block">Access Level</label>
-            <div className="grid grid-cols-2 gap-2">
-              {ACCESS_LEVELS.map((al) => (
-                <button
-                  key={al.value}
-                  type="button"
-                  onClick={() => setNewPerm((p) => ({ ...p, permission_level: al.value }))}
-                  className={`flex flex-col items-start rounded-lg border px-3 py-2.5 text-left transition-all ${
-                    newPerm.permission_level === al.value
-                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30'
-                      : 'border-[var(--border-color)] hover:bg-[var(--bg-primary)]'
-                  }`}
-                >
-                  <span
-                    className={`text-sm font-medium ${
-                      newPerm.permission_level === al.value
-                        ? 'text-primary-700 dark:text-primary-300'
-                        : 'text-[var(--text-primary)]'
-                    }`}
+          {bulkMode ? (
+            /* ── Bulk mode UI ── */
+            <div className="space-y-3">
+              {/* Schema selector for table/column types */}
+              {(newPerm.resource_type === 'table' || newPerm.resource_type === 'column') && (
+                <div>
+                  <label className="label mb-1.5 block">Schema</label>
+                  <select
+                    className="input"
+                    value={bulkSchema}
+                    onChange={(e) => { setBulkSchema(e.target.value); setBulkItems([]) }}
                   >
-                    {al.label}
-                  </span>
-                  <span className="text-xs text-[var(--text-muted)] mt-0.5">{al.description}</span>
-                </button>
-              ))}
-            </div>
-          </div>
+                    <option value="">Select a schema…</option>
+                    {bulkSchemas.map((s) => (
+                      <option key={s.name} value={s.name}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
-          {/* Summary & submit */}
-          {newPerm.resource_name.trim() && (
-            <div className="rounded-lg bg-[var(--bg-primary)] border border-[var(--border-color)] px-3 py-2 text-xs text-[var(--text-muted)]">
-              Granting{' '}
-              <span className="font-semibold text-[var(--text-primary)]">
-                {selectedLevel?.label}
-              </span>{' '}
-              to{' '}
-              <span className="font-mono font-semibold text-[var(--text-primary)]">
-                {newPerm.resource_name}
-              </span>{' '}
-              ({newPerm.resource_type})
+              {/* Access level for all */}
+              <div>
+                <label className="label mb-2 block">Default Access Level</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {ACCESS_LEVELS.map((al) => (
+                    <button
+                      key={al.value}
+                      type="button"
+                      onClick={() => {
+                        setNewPerm((p) => ({ ...p, permission_level: al.value }))
+                        setBulkItems((prev) => prev.map((i) => ({ ...i, level: al.value as 'read' | 'write' })))
+                      }}
+                      className={`flex flex-col items-start rounded-lg border px-3 py-2.5 text-left transition-all ${
+                        newPerm.permission_level === al.value
+                          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30'
+                          : 'border-[var(--border-color)] hover:bg-[var(--bg-primary)]'
+                      }`}
+                    >
+                      <span className={`text-sm font-medium ${newPerm.permission_level === al.value ? 'text-primary-700 dark:text-primary-300' : 'text-[var(--text-primary)]'}`}>
+                        {al.label}
+                      </span>
+                      <span className="text-xs text-[var(--text-muted)] mt-0.5">{al.description}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={bulkLoading ? undefined : <List size={14} />}
+                onClick={loadBulkResources}
+                loading={bulkLoading}
+              >
+                Load Resources
+              </Button>
+
+              {bulkItems.length > 0 && (
+                <div className="rounded-lg border border-[var(--border-color)] overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2 bg-[var(--bg-secondary)] border-b border-[var(--border-color)]">
+                    <span className="text-xs font-semibold text-[var(--text-primary)]">
+                      {selectedCount} / {bulkItems.length} selected
+                    </span>
+                    <div className="flex gap-2">
+                      <button onClick={() => toggleAll(true)} className="text-xs text-primary-500 hover:underline">All</button>
+                      <button onClick={() => toggleAll(false)} className="text-xs text-[var(--text-muted)] hover:underline">None</button>
+                    </div>
+                  </div>
+                  <div className="max-h-48 overflow-y-auto divide-y divide-[var(--border-color)]">
+                    {bulkItems.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-3 px-3 py-2">
+                        <button
+                          type="button"
+                          onClick={() => setBulkItems((prev) => prev.map((it, i) => i === idx ? { ...it, selected: !it.selected } : it))}
+                          className={`shrink-0 ${item.selected ? 'text-primary-500' : 'text-[var(--text-muted)]'}`}
+                        >
+                          {item.selected ? <CheckSquare size={15} /> : <Square size={15} />}
+                        </button>
+                        <span className="flex-1 font-mono text-sm text-[var(--text-primary)] truncate">{item.name}</span>
+                        <select
+                          className="text-xs rounded border border-[var(--border-color)] bg-[var(--bg-primary)] px-1.5 py-1 text-[var(--text-secondary)]"
+                          value={item.level}
+                          onChange={(e) => setBulkItems((prev) => prev.map((it, i) => i === idx ? { ...it, level: e.target.value as 'read' | 'write' } : it))}
+                        >
+                          <option value="read">View Only</option>
+                          <option value="write">Edit Access</option>
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {bulkItems.length > 0 && (
+                <Button
+                  size="sm"
+                  icon={<Plus size={14} />}
+                  onClick={handleGrantAll}
+                  loading={adding}
+                  disabled={selectedCount === 0}
+                >
+                  Grant {selectedCount} Permission{selectedCount !== 1 ? 's' : ''}
+                </Button>
+              )}
+            </div>
+          ) : (
+            /* ── Single mode UI ── */
+            <div className="space-y-4">
+              <div>
+                <label className="label mb-1.5 block">
+                  {selectedType?.label ?? 'Resource'} Name
+                </label>
+                <ResourceAutocomplete
+                  value={newPerm.resource_name}
+                  onChange={(v) => setNewPerm((p) => ({ ...p, resource_name: v }))}
+                  resourceType={newPerm.resource_type}
+                  placeholder={`Search or type a ${newPerm.resource_type} name…`}
+                />
+              </div>
+
+              <div>
+                <label className="label mb-2 block">Access Level</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {ACCESS_LEVELS.map((al) => (
+                    <button
+                      key={al.value}
+                      type="button"
+                      onClick={() => setNewPerm((p) => ({ ...p, permission_level: al.value }))}
+                      className={`flex flex-col items-start rounded-lg border px-3 py-2.5 text-left transition-all ${
+                        newPerm.permission_level === al.value
+                          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30'
+                          : 'border-[var(--border-color)] hover:bg-[var(--bg-primary)]'
+                      }`}
+                    >
+                      <span className={`text-sm font-medium ${newPerm.permission_level === al.value ? 'text-primary-700 dark:text-primary-300' : 'text-[var(--text-primary)]'}`}>
+                        {al.label}
+                      </span>
+                      <span className="text-xs text-[var(--text-muted)] mt-0.5">{al.description}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {newPerm.resource_name.trim() && (
+                <div className="rounded-lg bg-[var(--bg-primary)] border border-[var(--border-color)] px-3 py-2 text-xs text-[var(--text-muted)]">
+                  Granting{' '}
+                  <span className="font-semibold text-[var(--text-primary)]">{selectedLevel?.label}</span>{' '}
+                  to{' '}
+                  <span className="font-mono font-semibold text-[var(--text-primary)]">{newPerm.resource_name}</span>{' '}
+                  ({newPerm.resource_type})
+                </div>
+              )}
+
+              <Button
+                size="sm"
+                icon={<Plus size={14} />}
+                onClick={handleAdd}
+                loading={adding}
+                disabled={!newPerm.resource_name.trim()}
+              >
+                Grant Permission
+              </Button>
             </div>
           )}
-
-          <Button
-            size="sm"
-            icon={<Plus size={14} />}
-            onClick={handleAdd}
-            loading={adding}
-            disabled={!newPerm.resource_name.trim()}
-          >
-            Grant Permission
-          </Button>
         </div>
 
         {/* ── Current permissions ── */}
@@ -494,6 +693,76 @@ function PermissionsModal({
   )
 }
 
+// ─── Quick Create Group Modal ─────────────────────────────────────────────────
+
+function QuickCreateGroupModal({
+  isOpen,
+  onClose,
+}: {
+  isOpen: boolean
+  onClose: () => void
+}) {
+  const navigate = useNavigate()
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!name.trim()) return
+    setLoading(true)
+    try {
+      await adminService.createGroup({ name: name.trim(), description })
+      toast.success(`Group "${name}" created`)
+      onClose()
+      setName('')
+      setDescription('')
+    } catch (err: unknown) {
+      const error = err as { message?: string }
+      toast.error(error?.message ?? 'Failed to create group')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Create Group"
+      description="Add a new user group"
+      footer={
+        <>
+          <Button variant="secondary" onClick={() => { onClose(); navigate('/groups') }}>
+            Manage Groups
+          </Button>
+          <Button onClick={handleSubmit} loading={loading} icon={<Users size={16} />}>
+            Create Group
+          </Button>
+        </>
+      }
+    >
+      <form className="space-y-4" onSubmit={handleSubmit}>
+        <Input
+          label="Group Name"
+          name="name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. Data Team"
+          autoFocus
+        />
+        <Input
+          label="Description"
+          name="description"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Optional description"
+        />
+      </form>
+    </Modal>
+  )
+}
+
 // ─── Users Tab ────────────────────────────────────────────────────────────────
 
 function UsersTab() {
@@ -501,6 +770,7 @@ function UsersTab() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
+  const [showCreateGroup, setShowCreateGroup] = useState(false)
   const [editUser, setEditUser] = useState<User | null>(null)
   const [permUser, setPermUser] = useState<User | null>(null)
 
@@ -537,9 +807,14 @@ function UsersTab() {
             className="input pl-9"
           />
         </div>
-        <Button icon={<UserPlus size={16} />} onClick={() => setShowCreate(true)}>
-          Add User
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" icon={<Users size={16} />} onClick={() => setShowCreateGroup(true)}>
+            Add Group
+          </Button>
+          <Button icon={<UserPlus size={16} />} onClick={() => setShowCreate(true)}>
+            Add User
+          </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -615,6 +890,10 @@ function UsersTab() {
         </div>
       )}
 
+      <QuickCreateGroupModal
+        isOpen={showCreateGroup}
+        onClose={() => setShowCreateGroup(false)}
+      />
       <CreateUserModal
         isOpen={showCreate}
         onClose={() => setShowCreate(false)}
