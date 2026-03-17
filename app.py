@@ -17,6 +17,9 @@ from typing import List, Dict, Any, Optional
 import secrets
 from dotenv import load_dotenv
 import io
+import threading
+import tempfile
+import shutil
 
 # Load environment variables from .env file
 load_dotenv()
@@ -53,6 +56,70 @@ def load_exporters() -> dict:
     return found
 
 EXPORTERS: dict = load_exporters()
+
+# ── YAML in-memory cache (mtime-based) ────────────────────────────────────────
+_yaml_cache: dict = {}          # filepath -> {'mtime': float, 'data': dict}
+_yaml_cache_lock = threading.RLock()
+
+# Per-file write locks (prevent concurrent writes to the same file)
+_file_write_locks: dict = {}
+_file_write_locks_mutex = threading.Lock()
+
+
+def _get_write_lock(filepath: str) -> threading.RLock:
+    """Return (and lazily create) the per-file write lock."""
+    with _file_write_locks_mutex:
+        if filepath not in _file_write_locks:
+            _file_write_locks[filepath] = threading.RLock()
+        return _file_write_locks[filepath]
+
+
+def _atomic_write_yaml(filepath: str, content: dict) -> None:
+    """
+    Thread-safe, atomic YAML write.
+    Must be called while holding the file's write lock.
+
+    Steps:
+      1. Serialise to a temp file in the same directory.
+      2. Parse the temp file to verify it is valid YAML.
+      3. Copy the original to <filepath>.bak.
+      4. os.replace() — atomic on POSIX and Windows (same filesystem).
+      5. Invalidate / update the in-memory cache.
+    """
+    dir_name = os.path.dirname(os.path.abspath(filepath))
+    fd, tmp_path = tempfile.mkstemp(suffix='.yml.tmp', dir=dir_name)
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as fh:
+            yaml.dump(content, fh,
+                      default_flow_style=False,
+                      allow_unicode=True,
+                      sort_keys=False,
+                      indent=2)
+
+        # Validate: the written file must parse back cleanly
+        with open(tmp_path, 'r', encoding='utf-8') as fh:
+            verified = yaml.safe_load(fh)
+        if not isinstance(verified, dict):
+            raise ValueError('YAML validation failed: root is not a mapping')
+
+        # Backup original
+        if os.path.exists(filepath):
+            shutil.copy2(filepath, filepath + '.bak')
+
+        # Atomic rename
+        os.replace(tmp_path, filepath)
+
+        # Update cache
+        mtime = os.stat(filepath).st_mtime
+        with _yaml_cache_lock:
+            _yaml_cache[filepath] = {'mtime': mtime, 'data': content}
+
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def _build_export_data(user, export_type: str, resources: list) -> dict:
@@ -357,35 +424,43 @@ def check_resource_access(user_id: int, resource_type: str, resource_name: str) 
     """
     Check if user has access to a specific resource.
     Checks both individual permissions and group permissions.
+    'schema' and 'database' are treated as equivalent resource types.
     """
     # Admin has access to everything
     user = User.get(user_id)
     if user and user.role == 'admin':
         return True
-    
+
+    # Normalise: accept both 'schema' and 'database' for schema-level access
+    if resource_type in ('database', 'schema'):
+        type_variants = ('database', 'schema')
+    else:
+        type_variants = (resource_type,)
+
+    placeholders = ','.join(['?' for _ in type_variants])
+
     conn = sqlite3.connect(app.config['DATABASE'])
     cursor = conn.cursor()
-    
+
     # Check individual permissions
-    cursor.execute('''
-        SELECT * FROM permissions 
-        WHERE user_id = ? AND resource_type = ? AND resource_name = ?
-    ''', (user_id, resource_type, resource_name))
-    
+    cursor.execute(
+        f'SELECT id FROM permissions WHERE user_id = ? AND resource_type IN ({placeholders}) AND resource_name = ?',
+        (user_id, *type_variants, resource_name),
+    )
     if cursor.fetchone():
         conn.close()
         return True
-    
+
     # Check group permissions
-    cursor.execute('''
-        SELECT gp.* FROM group_permissions gp
-        JOIN user_group_members ugm ON gp.group_id = ugm.group_id
-        WHERE ugm.user_id = ? AND gp.resource_type = ? AND gp.resource_name = ?
-    ''', (user_id, resource_type, resource_name))
-    
+    cursor.execute(
+        f'''SELECT gp.id FROM group_permissions gp
+            JOIN user_group_members ugm ON gp.group_id = ugm.group_id
+            WHERE ugm.user_id = ? AND gp.resource_type IN ({placeholders}) AND gp.resource_name = ?''',
+        (user_id, *type_variants, resource_name),
+    )
     result = cursor.fetchone()
     conn.close()
-    
+
     return result is not None
 
 
@@ -426,7 +501,7 @@ def get_user_accessible_resources(user_id: int) -> Dict[str, List[str]]:
     
     resources = {'databases': [], 'tables': []}
     for perm_type, perm_name in all_perms:
-        if perm_type == 'database':
+        if perm_type in ('database', 'schema'):
             resources['databases'].append(perm_name)
         elif perm_type == 'table':
             resources['tables'].append(perm_name)
@@ -454,23 +529,36 @@ def log_activity(user_id: int, action: str, resource_type: str = None, resource_
 # ============================================================================
 
 def load_yaml_files() -> Dict[str, Any]:
-    """Load all YAML files from the configured directory."""
+    """Load YAML files with mtime-based in-memory caching for fast repeated access."""
     yaml_data = {}
     yaml_dir = app.config['YAML_DIRECTORY']
-    
+
     if not os.path.exists(yaml_dir):
         return yaml_data
-    
-    for filename in os.listdir(yaml_dir):
-        if filename.endswith('.yml') or filename.endswith('.yaml'):
+
+    try:
+        filenames = sorted(os.listdir(yaml_dir))
+    except OSError:
+        return yaml_data
+
+    with _yaml_cache_lock:
+        for filename in filenames:
+            if not filename.endswith(('.yml', '.yaml')):
+                continue
             filepath = os.path.join(yaml_dir, filename)
             try:
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    data = yaml.safe_load(f)
+                mtime = os.stat(filepath).st_mtime
+                cached = _yaml_cache.get(filepath)
+                if cached and cached['mtime'] == mtime:
+                    yaml_data[filename] = cached['data']
+                else:
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        data = yaml.safe_load(f)
+                    _yaml_cache[filepath] = {'mtime': mtime, 'data': data}
                     yaml_data[filename] = data
             except Exception as e:
-                print(f"Error loading {filename}: {e}")
-    
+                print(f'[yaml cache] Error loading {filename}: {e}')
+
     return yaml_data
 
 
@@ -1561,35 +1649,42 @@ def _find_yaml_file(schema: str):
 @app.route('/api/schemas/<schema>/tables/<table>', methods=['PATCH'])
 @login_required
 def update_table_description(schema, table):
-    """Update a table's description. Requires write permission on the schema or table."""
+    """Update a table description. Thread-safe atomic write with backup."""
     if not _check_write_access(schema, table):
         return jsonify({'error': 'Write permission required'}), 403
 
-    data = request.get_json()
-    new_description = data.get('description', '')
+    req = request.get_json()
+    new_description = (req.get('description') or '').strip()
 
     filepath = _find_yaml_file(schema)
     if not filepath:
         return jsonify({'error': 'Schema not found'}), 404
 
-    with open(filepath, 'r', encoding='utf-8') as f:
-        content = yaml.safe_load(f)
+    write_lock = _get_write_lock(filepath)
+    with write_lock:
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = yaml.safe_load(f)
+        except Exception as e:
+            return jsonify({'error': f'Failed to read schema file: {e}'}), 500
 
-    if not content or 'models' not in content:
-        return jsonify({'error': 'Invalid YAML structure'}), 400
+        if not isinstance(content, dict) or 'models' not in content:
+            return jsonify({'error': 'Invalid YAML structure'}), 400
 
-    updated = False
-    for model in content['models']:
-        if model.get('name') == table:
-            model['description'] = new_description
-            updated = True
-            break
+        updated = False
+        for model in content['models']:
+            if model.get('name') == table:
+                model['description'] = new_description
+                updated = True
+                break
 
-    if not updated:
-        return jsonify({'error': 'Table not found'}), 404
+        if not updated:
+            return jsonify({'error': 'Table not found in schema'}), 404
 
-    with open(filepath, 'w', encoding='utf-8') as f:
-        yaml.dump(content, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        try:
+            _atomic_write_yaml(filepath, content)
+        except Exception as e:
+            return jsonify({'error': f'Failed to save changes: {e}'}), 500
 
     log_activity(current_user.id, 'edit_table', 'table', f'{schema}.{table}')
     return jsonify({'success': True, 'description': new_description})
@@ -1598,38 +1693,45 @@ def update_table_description(schema, table):
 @app.route('/api/schemas/<schema>/tables/<table>/columns/<column>', methods=['PATCH'])
 @login_required
 def update_column_description(schema, table, column):
-    """Update a column's description. Requires write permission on the schema or table."""
+    """Update a column description. Thread-safe atomic write with backup."""
     if not _check_write_access(schema, table):
         return jsonify({'error': 'Write permission required'}), 403
 
-    data = request.get_json()
-    new_description = data.get('description', '')
+    req = request.get_json()
+    new_description = (req.get('description') or '').strip()
 
     filepath = _find_yaml_file(schema)
     if not filepath:
         return jsonify({'error': 'Schema not found'}), 404
 
-    with open(filepath, 'r', encoding='utf-8') as f:
-        content = yaml.safe_load(f)
+    write_lock = _get_write_lock(filepath)
+    with write_lock:
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = yaml.safe_load(f)
+        except Exception as e:
+            return jsonify({'error': f'Failed to read schema file: {e}'}), 500
 
-    if not content or 'models' not in content:
-        return jsonify({'error': 'Invalid YAML structure'}), 400
+        if not isinstance(content, dict) or 'models' not in content:
+            return jsonify({'error': 'Invalid YAML structure'}), 400
 
-    updated = False
-    for model in content['models']:
-        if model.get('name') == table:
-            for col in model.get('columns', []):
-                if col.get('name') == column:
-                    col['description'] = new_description
-                    updated = True
-                    break
-            break
+        updated = False
+        for model in content['models']:
+            if model.get('name') == table:
+                for col in model.get('columns', []):
+                    if col.get('name') == column:
+                        col['description'] = new_description
+                        updated = True
+                        break
+                break
 
-    if not updated:
-        return jsonify({'error': 'Column not found'}), 404
+        if not updated:
+            return jsonify({'error': 'Column not found in table'}), 404
 
-    with open(filepath, 'w', encoding='utf-8') as f:
-        yaml.dump(content, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        try:
+            _atomic_write_yaml(filepath, content)
+        except Exception as e:
+            return jsonify({'error': f'Failed to save changes: {e}'}), 500
 
     log_activity(current_user.id, 'edit_column', 'column', f'{schema}.{table}.{column}')
     return jsonify({'success': True, 'description': new_description})
