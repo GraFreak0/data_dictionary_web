@@ -1,0 +1,393 @@
+<!-- ================================================================
+     ENHANCED BROWSE PANEL with Edit Buttons
+     
+     Replace the existing Browse panel in index.html with this version.
+     
+     Features:
+     - Edit button for table descriptions
+     - Edit buttons for each column (data type, nullable, description)
+     - Real-time permission check (buttons only show if user can edit)
+     ================================================================ -->
+
+<div class="panel" id="browsePanel">
+  <div class="panel-header">
+    <h2 class="panel-title">📂 Browse Catalog</h2>
+  </div>
+
+  <div class="panel-body">
+    <div class="search-container" style="margin-bottom: 2rem;">
+      <input type="text" class="search-input" id="browseSearch" 
+             placeholder="Filter by schema or table name...">
+    </div>
+
+    <div class="browse-accordion" id="browseAccordion">
+      <!-- Schemas populated here by JS -->
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── Browse Panel Logic ───────────────────────────────────────── */
+let _browseData = {};
+let _canEditMetadata = false;
+
+// Check edit permission on load
+async function initBrowsePermissions() {
+  const d = await api('/api/metadata/check-edit-permission');
+  _canEditMetadata = d?.can_edit || false;
+  console.log('Browse edit permission:', _canEditMetadata);
+}
+
+// Load schemas and tables
+async function loadBrowseData() {
+  const d = await api('/api/all-resources');
+  if (!d) return;
+  
+  _browseData = d;
+  renderBrowseAccordion();
+}
+
+// Render the accordion
+function renderBrowseAccordion(filter = '') {
+  const container = document.getElementById('browseAccordion');
+  if (!container) return;
+  
+  container.innerHTML = '';
+  const filterLower = filter.toLowerCase();
+  
+  for (const schema of _browseData.schemas || []) {
+    const tables = _browseData.tables[schema] || [];
+    
+    // Filter tables
+    const filteredTables = tables.filter(t => 
+      t.name.toLowerCase().includes(filterLower) || 
+      schema.toLowerCase().includes(filterLower)
+    );
+    
+    if (filteredTables.length === 0 && !schema.toLowerCase().includes(filterLower)) {
+      continue; // Skip this schema
+    }
+    
+    // Schema section
+    const schemaSection = document.createElement('div');
+    schemaSection.className = 'browse-schema';
+    schemaSection.innerHTML = `
+      <div class="browse-schema-header" onclick="toggleBrowseSchema(this)">
+        <span class="browse-icon">📂</span>
+        <span class="browse-schema-name">${schema}</span>
+        <span class="browse-count">${filteredTables.length} tables</span>
+        <span class="browse-chevron">›</span>
+      </div>
+      <div class="browse-schema-body">
+        <div class="browse-tables" id="tables-${schema}"></div>
+      </div>
+    `;
+    
+    container.appendChild(schemaSection);
+    
+    // Populate tables
+    const tablesContainer = schemaSection.querySelector(`#tables-${schema}`);
+    for (const table of filteredTables) {
+      const tableEl = document.createElement('div');
+      tableEl.className = 'browse-table';
+      
+      const editBtn = _canEditMetadata ? 
+        `<button class="edit-btn edit-btn-small" 
+                onclick="event.stopPropagation(); openEditTableModal('${schema}', '${table.name}')" 
+                title="Edit table description">
+           ✏️
+         </button>` : '';
+      
+      tableEl.innerHTML = `
+        <div class="browse-table-header" onclick="loadTableColumnsInBrowse('${schema}', '${table.name}', this)">
+          <span class="browse-icon">📄</span>
+          <span class="browse-table-name">${table.name}</span>
+          ${editBtn}
+          <span class="browse-chevron">›</span>
+        </div>
+        <div class="browse-table-body" id="columns-${schema}-${table.name}" style="display:none">
+          <div class="loading-spinner" style="padding: 1rem; text-align: center;">
+            Loading columns...
+          </div>
+        </div>
+      `;
+      
+      tablesContainer.appendChild(tableEl);
+    }
+  }
+  
+  if (container.children.length === 0) {
+    container.innerHTML = '<div class="empty-state">No results found</div>';
+  }
+}
+
+// Toggle schema open/closed
+function toggleBrowseSchema(header) {
+  const body = header.nextElementSibling;
+  const isOpen = body.style.maxHeight && body.style.maxHeight !== '0px';
+  
+  if (isOpen) {
+    body.style.maxHeight = '0';
+    header.classList.remove('open');
+  } else {
+    body.style.maxHeight = body.scrollHeight + 'px';
+    header.classList.add('open');
+  }
+}
+
+// Load table columns when user clicks on table
+async function loadTableColumnsInBrowse(schema, table, headerEl) {
+  const bodyEl = headerEl.nextElementSibling;
+  const isOpen = bodyEl.style.display !== 'none';
+  
+  // Close if already open
+  if (isOpen) {
+    bodyEl.style.display = 'none';
+    headerEl.classList.remove('open');
+    return;
+  }
+  
+  // Open and load data
+  bodyEl.style.display = 'block';
+  headerEl.classList.add('open');
+  
+  // Load metadata
+  const d = await api(`/api/metadata/${schema}/${table}`);
+  if (!d) {
+    bodyEl.innerHTML = '<div class="error-state">Failed to load columns</div>';
+    return;
+  }
+  
+  // Render columns table
+  let html = '<table class="browse-columns-table"><thead><tr>';
+  html += '<th>Column</th>';
+  html += '<th>Type</th>';
+  html += '<th>Nullable</th>';
+  html += '<th>Description</th>';
+  if (_canEditMetadata) html += '<th></th>';
+  html += '</tr></thead><tbody>';
+  
+  for (const col of d.columns || []) {
+    const nullable = col.nullable ? '✓' : '✗';
+    const editBtn = _canEditMetadata ? 
+      `<button class="edit-btn edit-btn-small" 
+              onclick="openEditColumnModal('${schema}', '${table}', '${col.name}')" 
+              title="Edit column metadata">
+         ✏️
+       </button>` : '';
+    
+    html += `<tr>
+      <td><strong>${col.name}</strong></td>
+      <td><code>${col.data_type}</code></td>
+      <td style="text-align:center">${nullable}</td>
+      <td>${col.description || '<em>No description</em>'}</td>
+      ${_canEditMetadata ? `<td style="text-align:center">${editBtn}</td>` : ''}
+    </tr>`;
+  }
+  
+  html += '</tbody></table>';
+  
+  // Add table description if exists
+  if (d.description) {
+    html = `<div class="browse-table-desc"><strong>Description:</strong> ${d.description}</div>` + html;
+  }
+  
+  // Add constraints if exist
+  if (d.constraints && d.constraints.length > 0) {
+    let constraintsHtml = '<div class="browse-constraints"><strong>Constraints:</strong> ';
+    const parts = [];
+    for (const c of d.constraints) {
+      if (c.type === 'PRIMARY KEY') {
+        parts.push(`🔑 PRIMARY KEY (${c.columns.join(', ')})`);
+      } else if (c.type === 'FOREIGN KEY') {
+        parts.push(`🔗 FOREIGN KEY (${c.columns.join(', ')}) → ${c.referenced_table}(${c.referenced_columns.join(', ')})`);
+      } else if (c.type === 'UNIQUE') {
+        parts.push(`⚡ UNIQUE (${c.columns.join(', ')})`);
+      } else if (c.type === 'CHECK') {
+        parts.push(`✓ CHECK: ${c.expression}`);
+      }
+    }
+    constraintsHtml += parts.join(' | ') + '</div>';
+    html = constraintsHtml + html;
+  }
+  
+  bodyEl.innerHTML = html;
+}
+
+// Search filter
+document.getElementById('browseSearch')?.addEventListener('input', e => {
+  renderBrowseAccordion(e.target.value);
+});
+
+// Initialize on panel show
+window.addEventListener('DOMContentLoaded', async () => {
+  await initBrowsePermissions();
+  await loadBrowseData();
+});
+</script>
+
+<style>
+/* Browse Panel Styles */
+.browse-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.browse-schema {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-secondary);
+}
+
+.browse-schema-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.browse-schema-header:hover {
+  background: var(--bg-hover);
+}
+
+.browse-schema-header.open {
+  background: var(--bg-hover);
+  border-bottom: 1px solid var(--border);
+}
+
+.browse-schema-name {
+  font-weight: 600;
+  font-size: 1rem;
+  flex: 1;
+}
+
+.browse-count {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.browse-chevron {
+  font-size: 1.5rem;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+}
+
+.browse-schema-header.open .browse-chevron {
+  transform: rotate(90deg);
+}
+
+.browse-schema-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.browse-tables {
+  display: flex;
+  flex-direction: column;
+}
+
+.browse-table {
+  border-bottom: 1px solid var(--border);
+}
+
+.browse-table:last-child {
+  border-bottom: none;
+}
+
+.browse-table-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.browse-table-header:hover {
+  background: var(--bg-hover);
+}
+
+.browse-table-header.open {
+  background: var(--bg-hover);
+  font-weight: 600;
+}
+
+.browse-table-name {
+  flex: 1;
+}
+
+.browse-table-body {
+  padding: 0 1rem 1rem 3rem;
+  background: var(--bg-primary);
+}
+
+.browse-table-desc {
+  padding: 0.75rem;
+  background: var(--bg-secondary);
+  border-left: 3px solid var(--primary);
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+
+.browse-constraints {
+  padding: 0.625rem;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+
+.browse-columns-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.browse-columns-table th {
+  text-align: left;
+  padding: 0.625rem;
+  background: var(--bg-secondary);
+  border-bottom: 2px solid var(--border);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.browse-columns-table td {
+  padding: 0.625rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.browse-columns-table tr:last-child td {
+  border-bottom: none;
+}
+
+.browse-columns-table code {
+  background: var(--bg-secondary);
+  padding: 0.125rem 0.375rem;
+  border-radius: 3px;
+  font-size: 0.8125rem;
+}
+
+.edit-btn-small {
+  padding: 0.25rem 0.5rem !important;
+  font-size: 0.75rem !important;
+  min-width: auto !important;
+}
+
+.empty-state, .error-state {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+}
+</style>
