@@ -1,0 +1,233 @@
+<!-- ================================================================
+     METADATA EDITOR MODAL
+     Add this to index.html (inside page-body, after other modals)
+     
+     Shows when user clicks "Edit" button on a table/column
+     Only visible to users with can_edit_metadata permission
+     ================================================================ -->
+
+<!-- Edit Table Description Modal -->
+<div class="modal-backdrop" id="editTableModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title">Edit Table Description</h3>
+      <button class="modal-close" onclick="closeModal('editTableModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="editTableAlert" class="alert"></div>
+      
+      <div class="form-group">
+        <label class="form-label">Table</label>
+        <input class="form-input" type="text" id="editTableName" readonly>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label" for="editTableDesc">Description</label>
+        <textarea class="form-textarea" id="editTableDesc" rows="4" 
+                  placeholder="Enter table description..."></textarea>
+        <div class="form-helper">Describe what this table stores and its purpose</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('editTableModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTableDescription()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Column Modal -->
+<div class="modal-backdrop" id="editColumnModal">
+  <div class="modal-box modal-lg">
+    <div class="modal-header">
+      <h3 class="modal-title">Edit Column Metadata</h3>
+      <button class="modal-close" onclick="closeModal('editColumnModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="editColumnAlert" class="alert"></div>
+      
+      <div class="form-group">
+        <label class="form-label">Column</label>
+        <input class="form-input" type="text" id="editColumnFullName" readonly>
+      </div>
+      
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+        <div class="form-group">
+          <label class="form-label" for="editColumnType">Data Type</label>
+          <input class="form-input" type="text" id="editColumnType" 
+                 placeholder="e.g., VARCHAR(255), INTEGER, TIMESTAMP">
+          <div class="form-helper">The SQL data type for this column</div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label" for="editColumnNullable">Nullable</label>
+          <select class="form-select" id="editColumnNullable">
+            <option value="true">Yes (NULL allowed)</option>
+            <option value="false">No (NOT NULL)</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label" for="editColumnDesc">Description</label>
+        <textarea class="form-textarea" id="editColumnDesc" rows="4" 
+                  placeholder="Describe what this column represents..."></textarea>
+        <div class="form-helper">Be specific about what values this column contains</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('editColumnModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveColumnMetadata()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Global state for metadata editor ───────────────────────────────
+let _editContext = {
+  schema: '',
+  table: '',
+  column: ''
+};
+
+// ── Check if user can edit metadata ────────────────────────────────
+async function checkEditPermission() {
+  const d = await api('/api/metadata/check-edit-permission');
+  return d?.can_edit || false;
+}
+
+// ── Open edit table description modal ──────────────────────────────
+async function openEditTableModal(schemaName, tableName) {
+  const canEdit = await checkEditPermission();
+  if (!canEdit) {
+    showAlert('You do not have permission to edit metadata.', 'error');
+    return;
+  }
+  
+  _editContext = { schema: schemaName, table: tableName, column: '' };
+  
+  // Load current data
+  const d = await api(`/api/metadata/${schemaName}/${tableName}`);
+  if (!d) return;
+  
+  document.getElementById('editTableName').value = `${schemaName}.${tableName}`;
+  document.getElementById('editTableDesc').value = d.description || '';
+  document.getElementById('editTableAlert').className = 'alert';
+  
+  openModal('editTableModal');
+}
+
+// ── Save table description ─────────────────────────────────────────
+async function saveTableDescription() {
+  const newDesc = document.getElementById('editTableDesc').value.trim();
+  
+  const d = await api(
+    `/api/metadata/${_editContext.schema}/${_editContext.table}/description`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ description: newDesc })
+    }
+  );
+  
+  if (d?.success) {
+    showAlert('Table description updated successfully!', 'success', 'editTableAlert');
+    setTimeout(() => {
+      closeModal('editTableModal');
+      // Refresh the view if needed
+      if (typeof loadTableDetails === 'function') {
+        loadTableDetails(_editContext.schema, _editContext.table);
+      }
+    }, 1500);
+  } else {
+    showAlert(d?.error || 'Failed to update table description', 'error', 'editTableAlert');
+  }
+}
+
+// ── Open edit column modal ─────────────────────────────────────────
+async function openEditColumnModal(schemaName, tableName, columnName) {
+  const canEdit = await checkEditPermission();
+  if (!canEdit) {
+    showAlert('You do not have permission to edit metadata.', 'error');
+    return;
+  }
+  
+  _editContext = { schema: schemaName, table: tableName, column: columnName };
+  
+  // Load current data
+  const d = await api(`/api/metadata/${schemaName}/${tableName}`);
+  if (!d) return;
+  
+  const col = d.columns.find(c => c.name === columnName);
+  if (!col) {
+    showAlert('Column not found', 'error');
+    return;
+  }
+  
+  document.getElementById('editColumnFullName').value = `${schemaName}.${tableName}.${columnName}`;
+  document.getElementById('editColumnType').value = col.data_type || '';
+  document.getElementById('editColumnDesc').value = col.description || '';
+  document.getElementById('editColumnNullable').value = String(col.nullable !== false);
+  document.getElementById('editColumnAlert').className = 'alert';
+  
+  openModal('editColumnModal');
+}
+
+// ── Save column metadata ───────────────────────────────────────────
+async function saveColumnMetadata() {
+  const newType     = document.getElementById('editColumnType').value.trim();
+  const newDesc     = document.getElementById('editColumnDesc').value.trim();
+  const newNullable = document.getElementById('editColumnNullable').value === 'true';
+  
+  const d = await api(
+    `/api/metadata/${_editContext.schema}/${_editContext.table}/column/${_editContext.column}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({
+        data_type: newType,
+        description: newDesc,
+        nullable: newNullable
+      })
+    }
+  );
+  
+  if (d?.success) {
+    showAlert(d.message || 'Column metadata updated!', 'success', 'editColumnAlert');
+    setTimeout(() => {
+      closeModal('editColumnModal');
+      // Refresh the view if needed
+      if (typeof loadTableDetails === 'function') {
+        loadTableDetails(_editContext.schema, _editContext.table);
+      }
+    }, 1500);
+  } else {
+    showAlert(d?.error || 'Failed to update column metadata', 'error', 'editColumnAlert');
+  }
+}
+</script>
+
+<style>
+/* Add edit buttons to table/column rows */
+.edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--text-secondary);
+}
+
+.edit-btn:hover {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.edit-btn[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+</style>

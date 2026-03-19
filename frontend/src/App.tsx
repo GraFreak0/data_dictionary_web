@@ -11,6 +11,9 @@ import { Groups } from './pages/Groups'
 import { SchemaBrowser } from './pages/SchemaBrowser'
 import { Analytics } from './pages/Analytics'
 import { Files } from './pages/Files'
+import { Modal } from './components/ui/Modal'
+import { Button } from './components/ui/Button'
+import { useInactivityTimeout } from './hooks/useInactivityTimeout'
 
 function LoadingScreen() {
   return (
@@ -20,6 +23,51 @@ function LoadingScreen() {
         <p className="text-sm text-[var(--text-muted)]">Loading...</p>
       </div>
     </div>
+  )
+}
+
+// Watches for 10 minutes of inactivity and signs the user out automatically.
+// Shows a 60-second countdown warning before the timeout fires.
+function SessionTimeoutGuard() {
+  const { isAuthenticated, clearAuth } = useAuthStore()
+  const navigate = useNavigate()
+
+  const handleTimeout = () => {
+    clearAuth()
+    navigate('/signin', { replace: true, state: { reason: 'inactivity' } })
+  }
+
+  const { showWarning, secondsRemaining, resetTimer } = useInactivityTimeout({
+    enabled: isAuthenticated,
+    onTimeout: handleTimeout,
+  })
+
+  return (
+    <Modal
+      isOpen={showWarning}
+      onClose={resetTimer}
+      title="Session expiring soon"
+      size="sm"
+      closable={false}
+      footer={
+        <>
+          <Button variant="secondary" onClick={handleTimeout}>
+            Sign out now
+          </Button>
+          <Button variant="primary" onClick={resetTimer}>
+            Stay logged in
+          </Button>
+        </>
+      }
+    >
+      <p className="text-sm text-[var(--text-secondary)]">
+        You've been inactive for a while. You'll be signed out automatically in{' '}
+        <span className="font-semibold text-[var(--text-primary)]">
+          {secondsRemaining}s
+        </span>{' '}
+        to protect your session.
+      </p>
+    </Modal>
   )
 }
 
@@ -90,6 +138,7 @@ export default function App() {
   return (
     <>
       <UnauthorizedHandler />
+      <SessionTimeoutGuard />
       <Routes>
         <Route path="/signin" element={<AuthRoute><SignIn /></AuthRoute>} />
         <Route path="/signup" element={<AuthRoute><SignUp /></AuthRoute>} />
