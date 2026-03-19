@@ -2,7 +2,8 @@
 
 > A modern, full-stack web application for exploring, managing, and governing your data catalog — powered by Flask, React, and YAML-based metadata.
 
-[![Python](https://img.shields.io/badge/python-3.8+-blue?logo=python)](https://www.python.org/)
+[![Python](https://img.shields.io/pypi/pyversions/data-dictionary-web)](https://pypi.org/project/data-dictionary-web/)
+[![PyPI](https://img.shields.io/pypi/v/data-dictionary-web)](https://pypi.org/project/data-dictionary-web/)
 [![React](https://img.shields.io/badge/react-18+-61DAFB?logo=react)](https://react.dev/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
