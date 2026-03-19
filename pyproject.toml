@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "data-dictionary-web"
+dynamic = ["version"]
+description = "A self-hosted web application for exploring and governing your data catalog (YAML-based)."
+readme = "README.md"
+authors = [
+    { name = "GraFreak0" }
+]
+license = { text = "MIT" }
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Web Environment",
+    "Framework :: Flask",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+keywords = ["data", "dictionary", "catalog", "dbt", "yaml", "governance"]
+dependencies = [
+    "Flask>=3.0.0",
+    "Flask-CORS>=4.0.0",
+    "Flask-Login>=0.6.3",
+    "PyJWT>=2.8.0",
+    "Werkzeug>=3.0.1",
+    "PyYAML>=6.0.1",
+    "reportlab>=4.0.7",
+    "click>=8.1.7",
+    "python-dotenv>=1.0.0"
+]
+requires-python = ">=3.8"
+
+[project.urls]
+Homepage = "https://github.com/GraFreak0/data_dictionary_web"
+Documentation = "https://github.com/GraFreak0/data_dictionary_web/blob/main/DOCUMENTATION.md"
+Repository = "https://github.com/GraFreak0/data_dictionary_web"
+
+[project.scripts]
+ddweb = "data_dictionary_web.__main__:main"
+
+[tool.setuptools]
+packages = ["data_dictionary_web"]
+
+[tool.setuptools.dynamic]
+version = {attr = "data_dictionary_web.__version__"}

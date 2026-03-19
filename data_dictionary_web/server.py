@@ -37,17 +37,12 @@ def load_exporters() -> dict:
     Walk the exporters/ package, import every module, then collect all
     concrete subclasses of BaseExporter.  Returns {name: instance}.
     """
-    from exporters.base import BaseExporter
+    from .exporters.base import BaseExporter
 
-    # Make sure the exporters directory next to app.py is importable
-    exporters_dir = os.path.join(os.path.dirname(__file__), 'exporters')
-    if exporters_dir not in sys.path:
-        sys.path.insert(0, os.path.dirname(__file__))
-
-    import exporters as _exporters_pkg
+    import data_dictionary_web.exporters as _exporters_pkg
     for _finder, _modname, _ispkg in pkgutil.iter_modules(_exporters_pkg.__path__):
         if _modname != 'base':
-            importlib.import_module(f'exporters.{_modname}')
+            importlib.import_module(f'data_dictionary_web.exporters.{_modname}')
 
     found = {}
     for cls in BaseExporter.__subclasses__():
