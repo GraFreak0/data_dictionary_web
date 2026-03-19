@@ -1,0 +1,456 @@
+<!-- ================================================================
+     SEARCHABLE PERMISSION DROPDOWNS
+     
+     Enhanced permission management with:
+     - Dropdown list of all schemas
+     - When schema selected, dropdown of tables in format {schema}.{table}
+     - Real-time search/filter as user types
+     
+     Add this to admin.html and groups.html permission modals
+     ================================================================ -->
+
+<style>
+/* Searchable Select Styles */
+.searchable-select {
+  position: relative;
+  width: 100%;
+}
+
+.searchable-select-input {
+  width: 100%;
+  padding: 0.625rem 2.5rem 0.625rem 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.9375rem;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.searchable-select-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.searchable-select-input::placeholder {
+  color: var(--text-muted);
+}
+
+.searchable-select-arrow {
+  position: absolute;
+  right: 0.875rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+}
+
+.searchable-select.open .searchable-select-arrow {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+.searchable-select-dropdown {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  right: 0;
+  max-height: 16rem;
+  overflow-y: auto;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  display: none;
+}
+
+.searchable-select.open .searchable-select-dropdown {
+  display: block;
+}
+
+.searchable-select-option {
+  padding: 0.625rem 0.875rem;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 0.9375rem;
+}
+
+.searchable-select-option:hover {
+  background: var(--bg-hover);
+}
+
+.searchable-select-option.selected {
+  background: var(--primary-light);
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.searchable-select-option.disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  font-style: italic;
+}
+
+.searchable-select-option.disabled:hover {
+  background: transparent;
+}
+
+.searchable-select-group-label {
+  padding: 0.5rem 0.875rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.searchable-select-empty {
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 0.875rem;
+}
+</style>
+
+<script>
+/* ================================================================
+   Searchable Select Component
+   ================================================================ */
+
+class SearchableSelect {
+  constructor(inputId, options = {}) {
+    this.input = document.getElementById(inputId);
+    if (!this.input) {
+      console.error(`SearchableSelect: Input #${inputId} not found`);
+      return;
+    }
+    
+    this.container = this.input.closest('.searchable-select');
+    this.dropdown = this.container.querySelector('.searchable-select-dropdown');
+    this.items = [];
+    this.filteredItems = [];
+    this.selectedValue = null;
+    this.onChange = options.onChange || (() => {});
+    this.placeholder = options.placeholder || 'Select...';
+    
+    this.init();
+  }
+  
+  init() {
+    // Click input to toggle dropdown
+    this.input.addEventListener('click', () => this.toggle());
+    
+    // Type to filter
+    this.input.addEventListener('input', () => this.filter(this.input.value));
+    
+    // Close on outside click
+    document.addEventListener('click', (e) => {
+      if (!this.container.contains(e.target)) {
+        this.close();
+      }
+    });
+    
+    // Prevent form submission on Enter
+    this.input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') e.preventDefault();
+    });
+  }
+  
+  setItems(items) {
+    this.items = items;
+    this.filteredItems = items;
+    this.render();
+  }
+  
+  setValue(value) {
+    this.selectedValue = value;
+    const item = this.items.find(i => i.value === value);
+    this.input.value = item ? item.label : '';
+    this.render();
+  }
+  
+  clear() {
+    this.selectedValue = null;
+    this.input.value = '';
+    this.render();
+  }
+  
+  toggle() {
+    if (this.container.classList.contains('open')) {
+      this.close();
+    } else {
+      this.open();
+    }
+  }
+  
+  open() {
+    this.container.classList.add('open');
+    this.input.focus();
+    this.filter('');
+  }
+  
+  close() {
+    this.container.classList.remove('open');
+    // Restore selected value display
+    const item = this.items.find(i => i.value === this.selectedValue);
+    this.input.value = item ? item.label : '';
+  }
+  
+  filter(query) {
+    const q = query.toLowerCase();
+    this.filteredItems = this.items.filter(item => 
+      item.label.toLowerCase().includes(q) || 
+      (item.value && item.value.toLowerCase().includes(q))
+    );
+    this.render();
+  }
+  
+  render() {
+    if (!this.dropdown) return;
+    
+    if (this.filteredItems.length === 0) {
+      this.dropdown.innerHTML = '<div class="searchable-select-empty">No results found</div>';
+      return;
+    }
+    
+    let html = '';
+    let currentGroup = null;
+    
+    for (const item of this.filteredItems) {
+      // Group headers
+      if (item.group && item.group !== currentGroup) {
+        html += `<div class="searchable-select-group-label">${item.group}</div>`;
+        currentGroup = item.group;
+      }
+      
+      const selected = item.value === this.selectedValue ? 'selected' : '';
+      const disabled = item.disabled ? 'disabled' : '';
+      const classes = `searchable-select-option ${selected} ${disabled}`;
+      
+      if (item.disabled) {
+        html += `<div class="${classes}">${item.label}</div>`;
+      } else {
+        html += `<div class="${classes}" data-value="${item.value}">${item.label}</div>`;
+      }
+    }
+    
+    this.dropdown.innerHTML = html;
+    
+    // Attach click handlers
+    this.dropdown.querySelectorAll('.searchable-select-option:not(.disabled)').forEach(opt => {
+      opt.addEventListener('click', () => {
+        this.selectedValue = opt.dataset.value;
+        this.input.value = opt.textContent;
+        this.close();
+        this.onChange(this.selectedValue);
+      });
+    });
+  }
+}
+
+/* ================================================================
+   Permission Dropdowns - Schema & Table Selection
+   ================================================================ */
+
+let _allResources = null;
+let _schemaSelect = null;
+let _tableSelect = null;
+
+// Load all schemas and tables from API
+async function loadResourcesForPermissions() {
+  if (_allResources) return _allResources; // Cache
+  
+  const d = await api('/api/all-resources');
+  if (d) {
+    _allResources = d;
+  }
+  return _allResources;
+}
+
+// Initialize schema dropdown
+async function initSchemaDropdown(inputId, onSchemaChange) {
+  await loadResourcesForPermissions();
+  
+  _schemaSelect = new SearchableSelect(inputId, {
+    placeholder: 'Select schema...',
+    onChange: (value) => {
+      if (onSchemaChange) onSchemaChange(value);
+      updateTableDropdown(value);
+    }
+  });
+  
+  const items = (_allResources?.schemas || []).map(schema => ({
+    value: schema,
+    label: schema
+  }));
+  
+  _schemaSelect.setItems(items);
+  return _schemaSelect;
+}
+
+// Initialize table dropdown (depends on schema selection)
+function initTableDropdown(inputId) {
+  _tableSelect = new SearchableSelect(inputId, {
+    placeholder: 'Select table...',
+    onChange: (value) => {
+      console.log('Table selected:', value);
+    }
+  });
+  
+  return _tableSelect;
+}
+
+// Update table dropdown when schema changes
+function updateTableDropdown(schemaName) {
+  if (!_tableSelect || !_allResources) return;
+  
+  if (!schemaName) {
+    _tableSelect.setItems([]);
+    _tableSelect.clear();
+    return;
+  }
+  
+  const tables = _allResources.tables[schemaName] || [];
+  const items = tables.map(table => ({
+    value: table.full_name,   // e.g., "public.users"
+    label: table.full_name,
+    group: schemaName
+  }));
+  
+  _tableSelect.setItems(items);
+  _tableSelect.clear();
+}
+
+// Get selected resource (for saving permission)
+function getSelectedResource() {
+  const schema = _schemaSelect?.selectedValue;
+  const table = _tableSelect?.selectedValue;
+  
+  if (table) {
+    return { type: 'table', name: table };
+  } else if (schema) {
+    return { type: 'database', name: schema };
+  }
+  return null;
+}
+
+// Reset dropdowns
+function resetResourceDropdowns() {
+  if (_schemaSelect) _schemaSelect.clear();
+  if (_tableSelect) _tableSelect.clear();
+}
+</script>
+
+<!-- ================================================================
+     USAGE EXAMPLE in Add Permission Modal
+     ================================================================ -->
+
+<div class="modal-backdrop" id="addPermissionModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title">Add Permission</h3>
+      <button class="modal-close" onclick="closeModal('addPermissionModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="addPermAlert" class="alert"></div>
+      
+      <div class="form-group">
+        <label class="form-label">Schema</label>
+        <div class="searchable-select">
+          <input type="text" 
+                 class="searchable-select-input" 
+                 id="permSchemaSelect" 
+                 placeholder="Type to search schemas..."
+                 autocomplete="off">
+          <span class="searchable-select-arrow">▼</span>
+          <div class="searchable-select-dropdown"></div>
+        </div>
+        <div class="form-helper">Select a schema (database)</div>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">Table (Optional)</label>
+        <div class="searchable-select">
+          <input type="text" 
+                 class="searchable-select-input" 
+                 id="permTableSelect" 
+                 placeholder="Select schema first, then choose table..."
+                 autocomplete="off"
+                 disabled>
+          <span class="searchable-select-arrow">▼</span>
+          <div class="searchable-select-dropdown"></div>
+        </div>
+        <div class="form-helper">Leave blank for schema-level permission, or select specific table</div>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">Permission Level</label>
+        <select class="form-select" id="permLevel">
+          <option value="read">Read</option>
+          <option value="write">Write</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('addPermissionModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="savePermission()">Add Permission</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Initialize permission dropdowns when modal opens
+async function openAddPermissionModal() {
+  await initSchemaDropdown('permSchemaSelect', (schema) => {
+    // Enable table dropdown when schema is selected
+    document.getElementById('permTableSelect').disabled = !schema;
+  });
+  initTableDropdown('permTableSelect');
+  
+  resetResourceDropdowns();
+  document.getElementById('addPermAlert').className = 'alert';
+  openModal('addPermissionModal');
+}
+
+// Save permission
+async function savePermission() {
+  const resource = getSelectedResource();
+  if (!resource) {
+    showAlert('Please select a schema or table', 'error', 'addPermAlert');
+    return;
+  }
+  
+  const level = document.getElementById('permLevel').value;
+  
+  // Call your API to save permission
+  const d = await api('/api/admin/permissions', {
+    method: 'POST',
+    body: JSON.stringify({
+      user_id: _currentUserId,  // or group_id
+      resource_type: resource.type,
+      resource_name: resource.name,
+      permission_level: level
+    })
+  });
+  
+  if (d?.success) {
+    showAlert('Permission added successfully!', 'success', 'addPermAlert');
+    setTimeout(() => {
+      closeModal('addPermissionModal');
+      loadUserPermissions(_currentUserId);  // Refresh list
+    }, 1500);
+  } else {
+    showAlert(d?.error || 'Failed to add permission', 'error', 'addPermAlert');
+  }
+}
+</script>

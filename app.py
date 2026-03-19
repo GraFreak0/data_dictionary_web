@@ -220,6 +220,11 @@ app.config['DATABASE'] = os.getenv('DATABASE', './data_dictionary.db')
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
+# Populated by init_db() — holds the current server run's unique identifier.
+# All JWTs embed this value; a mismatch means the token was issued by a
+# different (previous) server run and is therefore no longer valid.
+CURRENT_BOOT_ID: str = ''
+
 CORS(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -328,7 +333,23 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
     ''')
-    
+
+    # Server config table — stores per-boot metadata
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS server_config (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+    ''')
+
+    # Generate a fresh boot_id on EVERY startup — this invalidates all tokens
+    # that were issued in previous server runs.
+    boot_id = secrets.token_hex(16)
+    cursor.execute(
+        'INSERT OR REPLACE INTO server_config (key, value) VALUES (?, ?)',
+        ('boot_id', boot_id)
+    )
+
     # Create default admin user if not exists
     cursor.execute("SELECT * FROM users WHERE username = 'admin'")
     if not cursor.fetchone():
@@ -337,9 +358,11 @@ def init_db():
             INSERT INTO users (username, email, password_hash, role, can_export)
             VALUES (?, ?, ?, ?, ?)
         ''', ('admin', 'admin@example.com', admin_password, 'admin', 1))
-    
+
     conn.commit()
     conn.close()
+
+    return boot_id
 
 
 class User(UserMixin):
@@ -390,6 +413,43 @@ class User(UserMixin):
 def load_user(user_id):
     """Load user for Flask-Login."""
     return User.get(user_id)
+
+
+# ============================================================================
+# JWT-based authentication (validates every request's Bearer token)
+# Every token carries the boot_id minted at the time of login.
+# A server restart produces a new boot_id, making all old tokens invalid.
+# ============================================================================
+
+@app.before_request
+def authenticate_from_jwt():
+    """Decode the Bearer token on every request and log in the user.
+    If the token is missing, expired, or has a mismatched boot_id the
+    user is simply left as anonymous — @login_required will reject them."""
+    auth_header = request.headers.get('Authorization', '')
+    if not auth_header.startswith('Bearer '):
+        return  # No token → leave user as anonymous
+
+    token = auth_header[len('Bearer '):].strip()
+    try:
+        payload = jwt.decode(
+            token,
+            app.config['JWT_SECRET_KEY'],
+            algorithms=['HS256']
+        )
+    except jwt.ExpiredSignatureError:
+        return  # Expired → anonymous
+    except jwt.InvalidTokenError:
+        return  # Malformed → anonymous
+
+    # Reject tokens from a previous server run
+    if payload.get('boot_id') != CURRENT_BOOT_ID:
+        return
+
+    user = User.get(payload.get('user_id'))
+    if user:
+        from flask_login import login_user as _login_user
+        _login_user(user)
 
 
 # ============================================================================
@@ -699,11 +759,12 @@ def login():
     # Log activity
     log_activity(user_id, 'login')
     
-    # Generate JWT token
+    # Generate JWT token (boot_id ties this token to the current server run)
     token = jwt.encode({
         'user_id': user_id,
         'username': username,
         'role': role,
+        'boot_id': CURRENT_BOOT_ID,
         'exp': datetime.utcnow() + app.config['JWT_ACCESS_TOKEN_EXPIRES']
     }, app.config['JWT_SECRET_KEY'], algorithm='HS256')
     
@@ -1969,6 +2030,12 @@ def serve_react(path: str):
         return send_from_directory(REACT_BUILD_DIR, path)
     return send_from_directory(REACT_BUILD_DIR, 'index.html')
 
+# ============================================================================
+# Startup — runs under every execution context (gunicorn, dev server, tests)
+# ============================================================================
+
+CURRENT_BOOT_ID = init_db()
+print(f'[startup] boot_id={CURRENT_BOOT_ID} — all previous sessions are now invalid.')
+
 if __name__ == '__main__':
-    init_db()
     app.run(debug=True, host='0.0.0.0', port=5002)
