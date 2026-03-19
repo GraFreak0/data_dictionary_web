@@ -29,26 +29,22 @@
 ## 🚀 Quick Setup
 
 ### Prerequisites
-- Python 3.8+
+- Python 3.9+
 - Node.js 18+ (for frontend development only)
 
-### 1. Clone & Install
+### 1. Install
+
+Install directly via pip:
 
 ```bash
-git clone <repo-url>
-cd data_dictionary_web
-pip install -r requirements.txt
+pip install data-dictionary-web
 ```
 
-### 2. Configure
+### 2. Configure (Optional)
 
-Copy the example environment file and update it:
+By default, the app looks for YAML files in `./models` and stores the database in `./data_dictionary.db`. You can configure this via environment variables or CLI flags.
 
-```bash
-cp .env.example .env
-```
-
-Edit `.env`:
+Create a `.env` file for secure configuration:
 
 ```env
 SECRET_KEY=your-random-secret-key
@@ -59,11 +55,19 @@ DATABASE=./data_dictionary.db
 
 ### 3. Run
 
+Start the server using the bundled CLI:
+
 ```bash
-python app.py
+ddweb
 ```
 
-Open **http://localhost:5002** and log in with:
+Or with custom options:
+
+```bash
+ddweb --port 8080 --yaml-dir ./dbt_models
+```
+
+Open **http://localhost:5002** (or your custom port) and log in with:
 - **Username:** `admin`
 - **Password:** `admin123`
 

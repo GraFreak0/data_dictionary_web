@@ -13,7 +13,7 @@ and must return raw bytes + a MIME type + a suggested filename extension.
 
 Example skeleton
 ----------------
-from exporters.base import BaseExporter
+from .base import BaseExporter
 
 class MyFormatExporter(BaseExporter):
     name        = "myformat"           # used in API: POST /api/export {format: "myformat"}

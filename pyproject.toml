@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "A self-hosted web application for exploring and governing your data catalog (YAML-based)."
 readme = "README.md"
 authors = [
-    { name = "GraFreak0" }
+    { name = "Isaiah Johnson", email = "d8aguy@mail.com" }
 ]
 license = { text = "MIT" }
 classifiers = [
@@ -18,7 +18,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -36,7 +35,7 @@ dependencies = [
     "click>=8.1.7",
     "python-dotenv>=1.0.0"
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 
 [project.urls]
 Homepage = "https://github.com/GraFreak0/data_dictionary_web"

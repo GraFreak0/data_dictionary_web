@@ -28,7 +28,7 @@ from reportlab.platypus import (
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 
-from exporters.base import BaseExporter
+from .base import BaseExporter
 
 
 # ── Palette ───────────────────────────────────────────────────────────────────

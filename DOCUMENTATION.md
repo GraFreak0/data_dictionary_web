@@ -54,11 +54,24 @@
 ## Project Structure
 
 ```
-data_dictionary_web/
-├── app.py                  # Flask backend — all API routes, auth, RBAC
+data_dictionary_web/         # Python Package directory
+├── server.py               # Flask backend — all API routes, auth, RBAC
 ├── config.py               # Config helpers
-├── requirements.txt        # Python dependencies
-├── setup.py                # First-run setup script
+├── __main__.py             # CLI entry point (ddweb)
+├── __init__.py             # Package init
+├── exporters/              # Pluggable export format modules
+│   ├── base.py             # BaseExporter abstract class
+│   └── *.py                # One file per export format
+├── static/
+│   └── dist/               # Built React SPA (served by Flask)
+├── templates/              # Legacy HTML templates (if any)
+```
+
+At the root directory:
+```
+├── pyproject.toml          # Python package build configuration
+├── MANIFEST.in             # Ensures templates and static are packaged
+├── quickstart.py           # First-run setup helper script
 ├── .env                    # Environment variables (never commit this)
 ├── .env.example            # Template for .env
 ├── exporters/              # Pluggable export format modules
@@ -88,7 +101,7 @@ data_dictionary_web/
 
 | Tool | Minimum Version | Purpose |
 |---|---|---|
-| Python | 3.8 | Backend runtime |
+| Python | 3.9 | Backend runtime and CLI tool |
 | pip | 21+ | Python package manager |
 | Node.js | 18 | Frontend build (dev only) |
 | npm | 9+ | Frontend package manager (dev only) |
@@ -97,23 +110,15 @@ data_dictionary_web/
 
 ## Installation
 
-### Backend
+### Standard Installation
+
+Simply install the bundled application as a global or virtual Python environment package:
 
 ```bash
-# 1. Clone the repository
-git clone <repo-url>
-cd data_dictionary_web
-
-# 2. (Recommended) Create a virtual environment
-python -m venv venv
-# Windows:
-venv\Scripts\activate
-# macOS/Linux:
-source venv/bin/activate
-
-# 3. Install Python dependencies
-pip install -r requirements.txt
+pip install data-dictionary-web
 ```
+
+This installs both the Flask backend and the compiled React frontend, and gives you access to the `ddweb` CLI command.
 
 ### Frontend (Production Build)
 
@@ -165,11 +170,16 @@ FLASK_ENV=development
 
 ## Running the App
 
-### Development
+### Local Execution
+
+Use the bundled `ddweb` CLI to launch the application:
 
 ```bash
-# Start the Flask backend
-python app.py
+# Run with defaults (0.0.0.0:5002, ./data_dictionary.db, ./models)
+ddweb
+
+# Or specify custom config inline
+ddweb --port 8080 --yaml-dir /path/to/my_dbt_models --database /path/to/catalog.db
 ```
 
 The app is available at **http://localhost:5002**.
@@ -417,7 +427,7 @@ POST /api/auth/login
 
 ```bash
 pip install gunicorn
-gunicorn -w 4 -b 0.0.0.0:5002 app:app
+gunicorn -w 4 -b 0.0.0.0:5002 "data_dictionary_web.server:app"
 ```
 
 Use `-w` workers equal to `(2 × CPU cores) + 1`.
@@ -446,11 +456,11 @@ server {
 ```dockerfile
 FROM python:3.11-slim
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt gunicorn
-COPY . .
+COPY pyproject.toml MANIFEST.in README.md ./
+COPY data_dictionary_web ./data_dictionary_web
+RUN pip install . gunicorn
 EXPOSE 5002
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5002", "app:app"]
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5002", "data_dictionary_web.server:app"]
 ```
 
 ```bash
