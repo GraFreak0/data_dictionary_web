@@ -150,3 +150,7 @@ node_modules/
 .vite/
 .turbo/
 *.tsbuildinfo
+
+# Allow frontend build output
+!data_dictionary_web/static/
+!data_dictionary_web/static/**
