@@ -39,6 +39,7 @@ jobs:
     # Required for PyPI Trusted Publisher (OIDC) — no API token needed
     permissions:
       id-token: write
+      contents: read
 
     environment:
       name: pypi
@@ -53,3 +54,5 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          attestations: false
