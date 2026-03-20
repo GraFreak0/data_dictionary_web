@@ -3,7 +3,7 @@ Data Dictionary Web UI
 A self-hosted web application for exploring and governing your data catalog.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __author__ = "Isaiah Johnson"
 __license__ = "MIT"
 
