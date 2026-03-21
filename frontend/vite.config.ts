@@ -20,7 +20,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: '../static/dist',
+    outDir: '../data_dictionary_web/static/dist',
     emptyOutDir: true,
     rollupOptions: {
       output: {
